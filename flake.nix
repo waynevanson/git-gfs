@@ -47,10 +47,15 @@
           clang
           codebase'
           llvmPackages.bintools
+          openssl.dev
+          pkg-config
           rust'
           rust-analyzer-nightly
         ];
-        buildInputs = with pkgs; [];
+        buildInputs = with pkgs; [
+          openssl
+          pkg-config
+        ];
 
         environment = {
           LIBCLANG_PATH = pkgs.lib.makeLibraryPath [
