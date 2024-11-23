@@ -46,6 +46,7 @@
           cargo-tarpaulin
           clang
           codebase'
+          libgit2.dev
           llvmPackages.bintools
           openssl.dev
           pkg-config
@@ -53,6 +54,7 @@
           rust-analyzer-nightly
         ];
         buildInputs = with pkgs; [
+          libgit2
           openssl
           pkg-config
         ];
@@ -71,6 +73,9 @@
               ''-I${pkgs.glib.out}/lib/glib-2.0/include/''
             ];
           PKG_CONFIG_PATH = createPkgConfigPath buildInputs;
+          # Ensure we use the version in the flake, not what `git2` crate prefers.
+          # https://github.com/rust-lang/git2-rs?tab=readme-ov-file#version-of-libgit2
+          LIBGIT2_NO_VENDOR = 1;
         };
 
         shellHook = ''
@@ -79,8 +84,8 @@
         '';
         common = environment // {inherit nativeBuildInputs buildInputs shellHook;};
 
-        main = naersk'.buildPackage {
-          name = "prng_split";
+        obfuscat = naersk'.buildPackage {
+          name = "obfuscat";
           version = "0.0.0";
           src = ./.;
         };
@@ -91,7 +96,7 @@
         # We're never really going to prod.
         # Our dev is the cargo watch -x run --bin elevated-cycling <fiules>
       in {
-        packages.range-split = main;
+        packages.obfuscat = obfuscat;
         devShells.default = pkgs.mkShell common;
       }
     );
