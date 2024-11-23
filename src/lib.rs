@@ -15,6 +15,16 @@ pub enum Command {
     },
 }
 
+// When a user pushes and git hooks are on, it should automatically
+// automatically push the other commit.
+impl Command {
+    pub fn call(self) {
+        match self {
+            _ => unimplemented!(),
+        }
+    }
+}
+
 #[derive(Parser)]
 pub struct Args {
     #[command(subcommand)]
