@@ -46,6 +46,7 @@
           cargo-tarpaulin
           clang
           codebase'
+          git
           libgit2.dev
           llvmPackages.bintools
           openssl.dev
@@ -54,6 +55,7 @@
           rust-analyzer-nightly
         ];
         buildInputs = with pkgs; [
+          git
           libgit2
           openssl
           pkg-config

@@ -1,5 +1,6 @@
 use bytesize::ByteSize;
 use clap::Parser;
+use clap_verbosity_flag::Verbosity;
 
 #[derive(Parser)]
 pub enum Command {
@@ -27,6 +28,9 @@ impl Command {
 
 #[derive(Parser)]
 pub struct Args {
+    #[command(flatten)]
+    verbosity: Verbosity,
+
     #[command(subcommand)]
     command: Command,
 }
