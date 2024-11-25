@@ -32,6 +32,7 @@
         };
 
         naersk' = pkgs.callPackage naersk {
+          inherit pkgs;
           cargo = rust';
           rustc = rust';
         };
@@ -49,6 +50,7 @@
           git
           libgit2.dev
           llvmPackages.bintools
+          openssl
           openssl.dev
           pkg-config
           rust'
