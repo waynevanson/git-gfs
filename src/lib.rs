@@ -1,6 +1,8 @@
 mod install;
 mod track;
 
+use std::path::PathBuf;
+
 use anyhow::Result;
 use clap::Parser;
 use clap_verbosity_flag::{InfoLevel, Verbosity};
@@ -41,9 +43,9 @@ pub enum Command {
     // add git attribute with filter for file pattern.s
     Track(Track),
     // archive?, compress, split.
-    Clean {},
+    Clean { filepath: PathBuf },
     // join, decompress, unarchive?
-    Smudge {},
+    Smudge { filepath: PathBuf },
     // Ensure pack is smaller than x
     PrePush { size: usize },
 }
@@ -58,11 +60,11 @@ impl Command {
             Self::Install(install) => {
                 install.install(&repo)?;
             }
-            Self::Clean {} => {
+            Self::Clean { .. } => {
                 // split into submodule.
                 unimplemented!();
             }
-            Self::Smudge {} => {
+            Self::Smudge { .. } => {
                 // merge into files.
                 unimplemented!();
             }

@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use clap::Parser;
-use git2::{ErrorCode, Repository, Submodule};
+use git2::{Config, ErrorCode, Repository, Submodule};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -13,16 +13,16 @@ pub struct Install {
 // add config into git
 impl Install {
     pub fn install(&self, repo: &Repository) -> Result<()> {
-        let sm = find_or_create_submodule(repo, self)?;
+        let submodule = find_or_create_submodule(repo, self)?;
 
-        create_config(repo)?;
+        let mut config = repo.config()?;
+        create_config(&mut config)?;
 
         Ok(())
     }
 }
 
-fn create_config(repo: &Repository) -> Result<()> {
-    let mut config = repo.config()?;
+fn create_config(config: &mut Config) -> Result<()> {
     config.set_str("filter.gfs.clean", "gfs clean %f")?;
     config.set_str("filter.gfs.smudge", "gfs smudge %f")?;
     config.set_bool("filter.gfs.required", true)?;
