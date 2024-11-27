@@ -1,1 +1,1 @@
-*.json filter="gfs" -text
+*.json filter=gfs -text

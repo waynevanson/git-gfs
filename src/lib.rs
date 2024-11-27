@@ -56,7 +56,7 @@ impl Command {
 
         match self {
             Self::Install(install) => {
-                unimplemented!();
+                install.install(&repo)?;
             }
             Self::Clean {} => {
                 // split into submodule.
@@ -66,8 +66,8 @@ impl Command {
                 // merge into files.
                 unimplemented!();
             }
-            Self::Track(track) => {
-                track.track(&repo)?;
+            Self::Track(inner) => {
+                inner.track(&repo)?;
             }
             Self::PrePush { size } => {
                 unimplemented!();

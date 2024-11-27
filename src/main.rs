@@ -1,10 +1,13 @@
+use anyhow::Result;
 use clap::Parser;
 use obfuscat::*;
 
-fn main() {
+fn main() -> Result<()> {
     println!("Hello, world!");
 
     let args = Args::parse();
 
-    args.command.call().unwrap();
+    args.command.call()?;
+
+    Ok(())
 }

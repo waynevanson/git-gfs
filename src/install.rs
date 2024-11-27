@@ -9,10 +9,25 @@ pub struct Install {
     path: PathBuf,
 }
 
+// create submodule
+// add config into git
 impl Install {
     pub fn install(&self, repo: &Repository) -> Result<()> {
-        unimplemented!();
+        let sm = find_or_create_submodule(repo, self)?;
+
+        create_config(repo)?;
+
+        Ok(())
     }
+}
+
+fn create_config(repo: &Repository) -> Result<()> {
+    let mut config = repo.config()?;
+    config.set_str("filter.gfs.clean", "gfs clean %f")?;
+    config.set_str("filter.gfs.smudge", "gfs smudge %f")?;
+    config.set_bool("filter.gfs.required", true)?;
+
+    Ok(())
 }
 
 fn find_submodule<'repo>(
@@ -43,8 +58,8 @@ fn allow_not_found<T>(
 
 fn create_submodule<'repo>(repo: &'repo Repository, options: &Install) -> Result<Submodule<'repo>> {
     let mut submodule = repo.submodule(&options.url.to_string(), &options.path, true)?;
-
-    submodule.clone(None)?;
+    submodule.init(true)?;
+    submodule.update(true, None)?;
     submodule.add_finalize()?;
 
     Ok(submodule)
