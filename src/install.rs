@@ -1,6 +1,6 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use clap::Parser;
-use git2::{Config, ErrorCode, Repository, Submodule};
+use gix::Repository;
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -12,66 +12,51 @@ pub struct Install {
 // create submodule
 // add config into git
 impl Install {
-    pub fn install(&self, repo: &Repository) -> Result<()> {
-        let submodule = find_or_create_submodule(repo, self)?;
-
-        let mut config = repo.config()?;
-        create_config(&mut config)?;
+    pub fn install(repo: &Repository) -> Result<()> {
+        // add config
+        hooks::add_to_repository(repo)?;
 
         Ok(())
     }
 }
 
-fn create_config(config: &mut Config) -> Result<()> {
-    config.set_str("filter.gfs.clean", "gfs clean %f")?;
-    config.set_str("filter.gfs.smudge", "gfs smudge %f")?;
-    config.set_bool("filter.gfs.required", true)?;
+mod hooks {
+    use anyhow::{anyhow, Result};
+    use gix::Repository;
+    use std::{fs::File, io::Write};
 
-    Ok(())
-}
+    const POST_COMMIT_SCRIPT: &str = r"
+        #!/bin/sh
 
-fn find_submodule<'repo>(
-    repo: &'repo Repository,
-    options: &Install,
-) -> Result<Option<Submodule<'repo>>> {
-    let pathname = options
-        .path
-        .to_str()
-        .ok_or_else(|| anyhow!("Expected PathBuf to be transformed to a string slice"))?;
+        gfs post-commit %f
+    ";
 
-    let submodule = allow_not_found(repo.find_submodule(pathname))?;
+    const PRE_PUSH_SCRIPT: &str = r"
+        #!/bin/sh
 
-    Ok(submodule)
-}
+        gfs pre-push %f
+    ";
 
-fn allow_not_found<T>(
-    result: std::result::Result<T, git2::Error>,
-) -> Result<Option<T>, git2::Error> {
-    result.map(Some).or_else(|error| {
-        if let ErrorCode::NotFound = error.code() {
-            Ok(None)
-        } else {
-            Err(error)
+    /// Adds git hooks to a repository.
+    ///
+    /// # Errors
+    ///
+    /// 1. Bare repository.
+    /// 2.
+    pub fn add_to_repository(repo: &Repository) -> Result<()> {
+        if repo.is_bare() {
+            let message = "gfs install only works in non bare repositories, as we need the .git folder to add the hooks into";
+            return Err(anyhow!(message));
         }
-    })
-}
 
-fn create_submodule<'repo>(repo: &'repo Repository, options: &Install) -> Result<Submodule<'repo>> {
-    let mut submodule = repo.submodule(&options.url.to_string(), &options.path, true)?;
-    submodule.init(true)?;
-    submodule.update(true, None)?;
-    submodule.add_finalize()?;
+        let hooks_dir = repo.path().join("hooks");
 
-    Ok(submodule)
-}
+        let mut pre_commit_file = File::create_new(hooks_dir.join("post-commit"))?;
+        pre_commit_file.write_all(POST_COMMIT_SCRIPT.trim().as_ref())?;
 
-fn find_or_create_submodule<'repo>(
-    repo: &'repo Repository,
-    options: &Install,
-) -> Result<Submodule<'repo>> {
-    find_submodule(repo, options).and_then(|submodule| {
-        submodule
-            .map(Ok)
-            .unwrap_or_else(|| create_submodule(repo, options))
-    })
+        let mut pre_push_file = File::create_new(hooks_dir.join("post-commit"))?;
+        pre_push_file.write_all(PRE_PUSH_SCRIPT.trim().as_ref())?;
+
+        Ok(())
+    }
 }

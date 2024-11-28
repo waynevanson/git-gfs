@@ -46,9 +46,8 @@
           cargo-watch
           cargo-tarpaulin
           clang
-          codebase'
+          # codebase'
           git
-          libgit2.dev
           llvmPackages.bintools
           openssl
           openssl.dev
@@ -58,7 +57,6 @@
         ];
         buildInputs = with pkgs; [
           git
-          libgit2
           openssl
           pkg-config
         ];
@@ -100,7 +98,7 @@
         # We're never really going to prod.
         # Our dev is the cargo watch -x run --bin elevated-cycling <fiules>
       in {
-        packages.obfuscat = obfuscat;
+        # packages.obfuscat = obfuscat;
         devShells.default = pkgs.mkShell common;
       }
     );

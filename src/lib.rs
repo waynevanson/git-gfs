@@ -1,14 +1,13 @@
 mod install;
 mod track;
 
-use std::path::PathBuf;
-
 use anyhow::Result;
 use clap::Parser;
 use clap_verbosity_flag::{InfoLevel, Verbosity};
-use git2::Repository;
+use gix::ThreadSafeRepository;
 use install::Install;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use track::Track;
 
 #[derive(Deserialize, Serialize)]
@@ -53,12 +52,17 @@ pub enum Command {
 // When a user pushes and git hooks are on, it should automatically
 // automatically push the other commit.
 impl Command {
-    pub fn call(self) -> Result<()> {
-        let repo = Repository::open(".")?;
+    /// sdsd
+    ///
+    /// # Errors
+    /// 1. Opening a repository.
+    /// 2. Running sub commands
+    pub fn run(self) -> Result<()> {
+        let _ = ThreadSafeRepository::open(".")?.to_thread_local();
 
         match self {
-            Self::Install(install) => {
-                install.install(&repo)?;
+            Self::Install(_) => {
+                unimplemented!();
             }
             Self::Clean { .. } => {
                 // split into submodule.
@@ -68,15 +72,13 @@ impl Command {
                 // merge into files.
                 unimplemented!();
             }
-            Self::Track(inner) => {
-                inner.track(&repo)?;
+            Self::Track(_) => {
+                unimplemented!();
             }
-            Self::PrePush { size } => {
+            Self::PrePush { .. } => {
                 unimplemented!();
             }
         }
-
-        Ok(())
     }
 }
 
