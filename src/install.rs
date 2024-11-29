@@ -1,17 +1,14 @@
 use anyhow::Result;
 use clap::Parser;
 use gix::Repository;
-use std::path::PathBuf;
 
 #[derive(Parser)]
-pub struct Install {
-    url: String,
-    path: PathBuf,
-}
+pub struct Install;
 
 // create submodule
 // add config into git
 impl Install {
+    /// Idempotently install git config and git hooks.
     pub fn install(repo: &Repository) -> Result<()> {
         // add config
         hooks::add_to_repository(repo)?;
@@ -42,7 +39,7 @@ mod hooks {
     /// # Errors
     ///
     /// 1. Bare repository.
-    /// 2.
+    /// 2. Writing to files.
     pub fn add_to_repository(repo: &Repository) -> Result<()> {
         if repo.is_bare() {
             let message = "gfs install only works in non bare repositories, as we need the .git folder to add the hooks into";

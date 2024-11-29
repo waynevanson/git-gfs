@@ -1,9 +1,12 @@
+mod clean;
 mod install;
+mod splitter;
 mod track;
 
 use anyhow::Result;
 use clap::Parser;
 use clap_verbosity_flag::{InfoLevel, Verbosity};
+use clean::Clean;
 use gix::ThreadSafeRepository;
 use install::Install;
 use serde::{Deserialize, Serialize};
@@ -41,8 +44,8 @@ pub enum Command {
     Install(Install),
     // add git attribute with filter for file pattern.s
     Track(Track),
-    // archive?, compress, split.
-    Clean { filepath: PathBuf },
+    // compress, split.
+    Clean(Clean),
     // join, decompress, unarchive?
     Smudge { filepath: PathBuf },
     // Ensure pack is smaller than x
@@ -52,20 +55,22 @@ pub enum Command {
 // When a user pushes and git hooks are on, it should automatically
 // automatically push the other commit.
 impl Command {
-    /// sdsd
+    /// Runs the main command.
     ///
     /// # Errors
     /// 1. Opening a repository.
     /// 2. Running sub commands
     pub fn run(self) -> Result<()> {
-        let _ = ThreadSafeRepository::open(".")?.to_thread_local();
+        let repo = ThreadSafeRepository::open(".")?.to_thread_local();
 
         match self {
             Self::Install(_) => {
                 unimplemented!();
             }
-            Self::Clean { .. } => {
+            Self::Clean(clean) => {
                 // split into submodule.
+                clean.run(&repo)?;
+
                 unimplemented!();
             }
             Self::Smudge { .. } => {
