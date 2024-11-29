@@ -7,7 +7,7 @@ use anyhow::Result;
 use clap::Parser;
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 use clean::Clean;
-use gix::ThreadSafeRepository;
+use gix::{Repository, ThreadSafeRepository};
 use install::Install;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -44,12 +44,29 @@ pub enum Command {
     Install(Install),
     // add git attribute with filter for file pattern.s
     Track(Track),
-    // compress, split.
+    // split.
     Clean(Clean),
-    // join, decompress, unarchive?
+    // join
+    // - Check to see if parts are stored in commits by checking location against contents of file.
+    // - Move them to `/git/parts`. How should I hash this so there's no conflicts?
+    // - Join and concat.
     Smudge { filepath: PathBuf },
     // Ensure pack is smaller than x
     PrePush { size: usize },
+    PreCommit(PreCommit),
+}
+
+#[derive(Parser)]
+pub struct PreCommit;
+
+impl PreCommit {
+    pub fn run(repo: &Repository) -> Result<()> {
+        // commit each part into refs/split/<commit-hash> from the previous commit (without the file)
+        // remove the previous part? Maybe we need it so the file is actually added. tow parents, makes sense.
+        // merge the last into this.
+
+        Ok(())
+    }
 }
 
 // When a user pushes and git hooks are on, it should automatically
@@ -68,7 +85,6 @@ impl Command {
                 unimplemented!();
             }
             Self::Clean(clean) => {
-                // split into submodule.
                 clean.run(&repo)?;
 
                 unimplemented!();
@@ -78,6 +94,10 @@ impl Command {
                 unimplemented!();
             }
             Self::Track(_) => {
+                unimplemented!();
+            }
+
+            Self::PreCommit(_) => {
                 unimplemented!();
             }
             Self::PrePush { .. } => {

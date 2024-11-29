@@ -3,7 +3,11 @@ use anyhow::{anyhow, Result};
 use bytesize::ByteSize;
 use clap::Parser;
 use gix::Repository;
-use std::{fs::File, io::copy, path::PathBuf};
+use std::{
+    fs::File,
+    io::copy,
+    path::{Path, PathBuf},
+};
 
 #[derive(Parser)]
 pub struct Clean {
@@ -23,9 +27,7 @@ impl Clean {
         }
 
         let git = repo.path();
-        let root = git
-            .parent()
-            .ok_or_else(|| anyhow!("Expected .git directory of repository to have a parent"))?;
+        let root = repo.root()?;
 
         let mut reader = File::open(root.join(&self.filepath))?;
 
@@ -38,5 +40,23 @@ impl Clean {
         copy(&mut reader, &mut writer)?;
 
         Ok(())
+    }
+}
+
+pub trait RepositoryExtension {
+    fn root(&self) -> Result<&Path>;
+}
+
+impl RepositoryExtension for Repository {
+    fn root(&self) -> Result<&Path> {
+        let root = if self.is_bare() {
+            self.path()
+        } else {
+            self.path()
+                .parent()
+                .ok_or_else(|| anyhow!("Expected .git directory of repository to have a parent"))?
+        };
+
+        Ok(root)
     }
 }
