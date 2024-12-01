@@ -3,7 +3,11 @@ use crate::map_ok_then::MapOkThen;
 use anyhow::{anyhow, Result};
 use clap::Parser;
 use gix::{
-    glob::wildmatch, objs::tree::EntryKind, refs::transaction::PreviousValue, Repository,
+    attrs::search::Match,
+    glob::{wildmatch, Pattern},
+    objs::tree::EntryKind,
+    refs::transaction::PreviousValue,
+    Repository,
 };
 use glob::glob;
 use itertools::Itertools;
@@ -11,6 +15,35 @@ use std::collections::HashSet;
 
 #[derive(Parser)]
 pub struct PostCommit;
+
+fn get_patterns(repo: &Repository) -> Result<HashSet<Pattern>> {
+    let worktree = repo
+        .worktree()
+        .ok_or_else(|| anyhow!("Expected to find work tree"))?;
+
+    let attributes = worktree.attributes(None)?.attribute_matches();
+
+    // all patterns contain our custom filter=split -text
+    let patterns = attributes
+        .iter()
+        .filter(has_split_attributes)
+        .map(|r#match| r#match.pattern.to_owned())
+        .collect::<HashSet<_>>();
+
+    Ok(patterns)
+}
+
+fn has_split_attributes(r#match: &Match<'_>) -> bool {
+    let is_filter = r#match.assignment.name.as_str() == "filter";
+
+    let is_split = r#match
+        .assignment
+        .state
+        .as_bstr()
+        .map(|bstr| bstr == "split");
+
+    matches!((is_filter, is_split), (true, Some(true)))
+}
 
 impl PostCommit {
     pub fn run(repo: &Repository) -> Result<()> {
@@ -20,30 +53,10 @@ impl PostCommit {
 
         let committed = repo.head_commit()?;
 
-        let worktree = repo
-            .worktree()
-            .ok_or_else(|| anyhow!("Expected to find work tree"))?;
-
-        let attributes = worktree.attributes(None)?.attribute_matches();
-
-        // all patterns contain our custom filter=split -text
-        let patterns = attributes
-            .iter()
-            .filter(|r#match| {
-                let is_filter = r#match.assignment.name.as_str() == "filter";
-                let is_split = r#match
-                    .assignment
-                    .state
-                    .as_bstr()
-                    .map(|bstr| bstr == "split");
-
-                matches!((is_filter, is_split), (true, Some(true)))
-            })
-            .map(|r#match| r#match.pattern)
-            .collect::<HashSet<_>>();
-
         // does this commit contain changes in split parts?
         let tree = committed.tree()?;
+
+        let patterns = get_patterns(repo)?;
 
         // assuming this is relative to the root.
         let paths_changed = tree
