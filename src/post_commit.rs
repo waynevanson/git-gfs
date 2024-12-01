@@ -4,7 +4,9 @@ use anyhow::{anyhow, Result};
 use clap::Parser;
 use gix::{
     attrs::search::Match,
+    bstr::BStr,
     glob::{wildmatch, Pattern},
+    object::tree::EntryRef,
     objs::tree::EntryKind,
     refs::transaction::PreviousValue,
     Repository,
@@ -45,6 +47,30 @@ fn has_split_attributes(r#match: &Match<'_>) -> bool {
     matches!((is_filter, is_split), (true, Some(true)))
 }
 
+fn is_entry_file(entry: &EntryRef<'_, '_>) -> bool {
+    matches!(
+        entry.mode().kind(),
+        EntryKind::Blob | EntryKind::BlobExecutable
+    )
+}
+
+fn patterns_contains_entry(patterns: &HashSet<Pattern>, entry: &EntryRef<'_, '_>) -> bool {
+    patterns
+        .iter()
+        .any(|pattern| pattern.matches(entry.filename(), wildmatch::Mode::NO_MATCH_SLASH_LITERAL))
+}
+
+fn create_git_parts_pattern(repo: &Repository, filename: &BStr) -> Result<String> {
+    let path = repo.path().join("parts").join(format!("{filename}.part.*"));
+
+    let pattern = path
+        .to_str()
+        .ok_or_else(|| anyhow!("Expected to create pattern"))?
+        .to_string();
+
+    Ok(pattern)
+}
+
 impl PostCommit {
     pub fn run(repo: &Repository) -> Result<()> {
         // commit each part into refs/split/<commit-hash> from the current commit (with the file)
@@ -63,35 +89,19 @@ impl PostCommit {
             .iter()
             .map(|result| -> Result<_> { Ok(result?) })
             // keep only if the thing is a file.
-            .filter_ok(|entry| {
-                matches!(
-                    entry.mode().kind(),
-                    EntryKind::Blob | EntryKind::BlobExecutable
-                )
-            })
+            .filter_ok(is_entry_file)
             // keep only if it uses our filter.
-            .filter_ok(|entry| {
-                patterns.iter().any(|pattern| {
-                    pattern.matches(entry.filename(), wildmatch::Mode::NO_MATCH_SLASH_LITERAL)
-                })
-            })
+            .filter_ok(|entry| patterns_contains_entry(&patterns, entry))
             // file names only
             .flatten_ok_then(|entry| {
-                let path = repo
-                    .path()
-                    .join("parts")
-                    .join(format!("{}.part.*", entry.filename()));
+                let pattern = create_git_parts_pattern(repo, entry.filename())?;
 
-                let pattern = path
-                    .to_str()
-                    .ok_or_else(|| anyhow!("Expected to create pattern"))?;
-
-                let files = glob(pattern)?.map(|result| -> Result<_> { Ok(result?) });
+                let files = glob(&pattern)?.map(|result| -> Result<_> { Ok(result?) });
 
                 let ding = files.map_ok_then(|filepath| {
                     let id = repo.commit("", "", committed.id(), Some(committed.id()))?;
 
-                    let reference_name = format!("/refs/split/{}", ":commit-id");
+                    let reference_name = format!("/refs/split/{id}");
                     // create reference after not before.
                     let reference =
                         repo.reference(reference_name, id, PreviousValue::MustNotExist, "")?;
