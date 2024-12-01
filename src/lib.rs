@@ -1,15 +1,18 @@
 mod clean;
+mod flatten_ok_then;
 mod install;
+mod map_ok_then;
+mod post_commit;
 mod splitter;
 mod track;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use clap::Parser;
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 use clean::Clean;
-use gix::{objs::tree::EntryKind, Repository, ThreadSafeRepository};
+use gix::ThreadSafeRepository;
 use install::Install;
-use itertools::Itertools;
+use post_commit::PostCommit;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use track::Track;
@@ -55,55 +58,6 @@ pub enum Command {
     // Ensure pack is smaller than x
     PrePush { size: usize },
     PostCommit(PostCommit),
-}
-
-#[derive(Parser)]
-pub struct PostCommit;
-
-impl PostCommit {
-    pub fn run(repo: &Repository) -> Result<()> {
-        // commit each part into refs/split/<commit-hash> from the current commit (with the file)
-        // remove the previous part? Maybe we need it so the file is actually added. tow parents, makes sense.
-        // merge the last into this.
-
-        let committed = repo.head_commit()?;
-
-        // todo: better way to find first commit when it has multiple parents
-        let parent = committed
-            .parent_ids()
-            .next()
-            .ok_or_else(|| anyhow!("Expected head commit to have at least one parent"))?;
-
-        // does this commit contain changes in split parts?
-        let tree = committed.tree()?;
-
-        // assuming this is relative to the root.
-        let paths_changed: Vec<_> = tree
-            .iter()
-            .filter_ok(|entry| {
-                matches!(
-                    entry.mode().kind(),
-                    EntryKind::Blob | EntryKind::BlobExecutable
-                )
-            })
-            .map_ok(|entry| entry.filename().to_owned())
-            .try_collect()?;
-
-        // get pattern of split parts from .gitattributes
-        // filter above to only contain these patterns
-        // for each filepath, read all the parts and add one per commit.
-        // creat refs for it locally?
-
-        // read split files.
-
-        let git = repo.path();
-
-        let parts_path = git.join("parts");
-
-        // how to commit?
-
-        Ok(())
-    }
 }
 
 // When a user pushes and git hooks are on, it should automatically
