@@ -83,6 +83,16 @@ impl PostCommit {
     /// and ensure they're stored in git as objects so we can retrieve them later.
     ///
     /// We'll currently store each file as a tree that contains parts stored as blobs.
+    /// To ensure we can send these to the remote, we need to create a reference to the tree too.
+    ///
+    /// 1. Get patterns.
+    /// 2. Get files.
+    /// 3. Filter for files that match the pattern.
+    /// 4. For each file, create the blobs and put them in a tree.
+    /// 5. Create a reference to the tree as `refs/gfs/:tree-id`
+    /// 6. Revert previous commit.
+    /// 7. Replace the contents of with a pointer to the reference with some metadata.
+    /// 8. Commit
     pub fn run(repo: &Repository) -> Result<()> {
         // commit each part into refs/split/<commit-hash> from the current commit (with the file)
         // remove the previous part? Maybe we need it so the file is actually added. tow parents, makes sense.
