@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
-use obfuscat::Args;
+use git_file_storage::Args;
 
 fn main() -> Result<()> {
     println!("Hello, world!");

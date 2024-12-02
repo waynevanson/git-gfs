@@ -435,6 +435,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "git-file-storage"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytesize",
+ "clap",
+ "clap-verbosity-flag 3.0.0",
+ "derive_more",
+ "env_logger",
+ "gix",
+ "gix-filter",
+ "glob",
+ "itertools",
+ "log",
+ "prng_split",
+ "range-split",
+ "serde",
+ "tar",
+ "toml",
+ "url",
+ "xz",
+]
+
+[[package]]
 name = "gix"
 version = "0.68.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1592,30 +1616,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2d80299ef12ff69b16a84bb182e3b9df68b5a91574d3d4fa6e41b65deec4df1"
 dependencies = [
  "adler2",
-]
-
-[[package]]
-name = "obfuscat"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bytesize",
- "clap",
- "clap-verbosity-flag 3.0.0",
- "derive_more",
- "env_logger",
- "gix",
- "gix-filter",
- "glob",
- "itertools",
- "log",
- "prng_split",
- "range-split",
- "serde",
- "tar",
- "toml",
- "url",
- "xz",
 ]
 
 [[package]]

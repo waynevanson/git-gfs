@@ -65,13 +65,24 @@ fn create_git_parts_pattern(repo: &Repository, filename: &BStr) -> Result<String
 
     let pattern = path
         .to_str()
-        .ok_or_else(|| anyhow!("Expected to create pattern"))?
+        .ok_or_else(|| anyhow!("Expected to create pattern as string slice"))?
         .to_string();
 
     Ok(pattern)
 }
 
 impl PostCommit {
+    /// The script that runs during the post-commit stage via a git hook.
+    ///
+    /// Here's the new approach now we understand how git works.
+    ///
+    /// When a files are commited, we check to see if any of the files
+    /// match patterns specified in `.gitattributes#"filter.split -text"`.
+    ///
+    /// On files that match, we need to get all the parts that were created when checking in,
+    /// and ensure they're stored in git as objects so we can retrieve them later.
+    ///
+    /// We'll currently store each file as a tree that contains parts stored as blobs.
     pub fn run(repo: &Repository) -> Result<()> {
         // commit each part into refs/split/<commit-hash> from the current commit (with the file)
         // remove the previous part? Maybe we need it so the file is actually added. tow parents, makes sense.
@@ -105,6 +116,7 @@ impl PostCommit {
                     // create reference after not before.
                     let reference =
                         repo.reference(reference_name, id, PreviousValue::MustNotExist, "")?;
+
                     Ok(())
                 });
 
