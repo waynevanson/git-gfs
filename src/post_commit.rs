@@ -167,16 +167,15 @@ impl PostCommit {
     pub fn run(repo: &Repository) -> Result<()> {
         let files = get_large_files_paths(repo)?;
 
-        // nice!
         let files: Vec<_> = files
             .into_iter()
-            .map(|filepath| get_unstaged_parts(repo, &filepath))
-            .map_ok_then(|parts| -> Result<()> {
+            .map(|filepath| get_unstaged_parts(repo, &filepath).map(|parts| (filepath, parts)))
+            .map_ok_then(|(filepath, parts)| -> Result<()> {
                 let tree_id = create_tree_id(repo, parts)?;
                 let ref_id = create_reference(repo, tree_id)?;
 
                 let pointer = Pointer::from_sha(HashType::SHA256, ref_id.to_string());
-                pointer.write_to_file("/fill/me/out/")?;
+                pointer.write_to_file(filepath)?;
 
                 // alright well I'm stuck here let's regroup later.
                 let index = repo.index()?;
