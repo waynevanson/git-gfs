@@ -150,7 +150,12 @@ impl PostCommit {
                     .reference(name, tree_id, PreviousValue::MustNotExist, "")?
                     .id();
 
+                // now we need to write the pointer using the reference
+                // into the main file
                 //
+                // need to remove file from latest commit
+
+                // Bro can I actually merge N+3 amount of commits?
 
                 Ok(())
             })
