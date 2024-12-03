@@ -1,19 +1,25 @@
-use crate::flatten_ok_then::FlattenOkThen;
 use crate::map_ok_then::MapOkThen;
 use anyhow::{anyhow, Result};
 use clap::Parser;
 use gix::{
     attrs::search::Match,
-    bstr::BStr,
+    bstr::ByteSlice,
     glob::{wildmatch, Pattern},
     object::tree::EntryRef,
-    objs::tree::EntryKind,
+    objs::{
+        tree::{Entry, EntryKind},
+        Tree,
+    },
     refs::transaction::PreviousValue,
     Repository,
 };
 use glob::glob;
 use itertools::Itertools;
-use std::collections::HashSet;
+use std::{
+    collections::HashSet,
+    fs::File,
+    path::{Path, PathBuf},
+};
 
 #[derive(Parser)]
 pub struct PostCommit;
@@ -60,8 +66,11 @@ fn patterns_contains_entry(patterns: &HashSet<Pattern>, entry: &EntryRef<'_, '_>
         .any(|pattern| pattern.matches(entry.filename(), wildmatch::Mode::NO_MATCH_SLASH_LITERAL))
 }
 
-fn create_git_parts_pattern(repo: &Repository, filename: &BStr) -> Result<String> {
-    let path = repo.path().join("parts").join(format!("{filename}.part.*"));
+fn create_git_parts_pattern(repo: &Repository, filename: &Path) -> Result<String> {
+    let path = repo
+        .path()
+        .join("parts")
+        .join(format!("{}.part.*", filename.to_string_lossy()));
 
     let pattern = path
         .to_str()
@@ -69,6 +78,25 @@ fn create_git_parts_pattern(repo: &Repository, filename: &BStr) -> Result<String
         .to_string();
 
     Ok(pattern)
+}
+
+fn large_files_changed(repo: &Repository) -> Result<Vec<PathBuf>> {
+    let tree = repo.head_commit()?.tree()?;
+
+    let patterns = get_patterns(repo)?;
+
+    // assuming this is relative to the root.
+    let paths_changed: Vec<_> = tree
+        .iter()
+        .map(|result| -> Result<_> { Ok(result?) })
+        // keep only if the thing is a file.
+        .filter_ok(is_entry_file)
+        // keep only if it uses our filter.
+        .filter_ok(|entry| patterns_contains_entry(&patterns, entry))
+        .map_ok_then(|entry| Ok(entry.filename().to_path()?.to_path_buf()))
+        .try_collect()?;
+
+    Ok(paths_changed)
 }
 
 impl PostCommit {
@@ -89,59 +117,54 @@ impl PostCommit {
     /// 2. Get files.
     /// 3. Filter for files that match the pattern.
     /// 4. For each file, create the blobs and put them in a tree.
-    /// 5. Create a reference to the tree as `refs/gfs/:tree-id`
+    /// 5. Create a reference to the tree as `refs/gfs/:tree-id`.
     /// 6. Revert previous commit.
-    /// 7. Replace the contents of with a pointer to the reference with some metadata.
+    /// 7. Replace the contents of the file with a pointer to the reference with some metadata.
     /// 8. Commit
     pub fn run(repo: &Repository) -> Result<()> {
-        // commit each part into refs/split/<commit-hash> from the current commit (with the file)
-        // remove the previous part? Maybe we need it so the file is actually added. tow parents, makes sense.
-        // merge the last into this.
+        let files = large_files_changed(repo)?;
 
-        let committed = repo.head_commit()?;
+        // nice!
+        let files: Vec<_> = files
+            .into_iter()
+            .map(|filepath| create_git_parts_pattern(repo, &filepath))
+            .map_ok_then(|pattern| Ok(glob(&pattern)?))
+            .map_ok_then(|filepaths_parts| -> Result<()> {
+                let entries: Vec<_> = filepaths_parts
+                    .map(|filepath_part| -> Result<_> {
+                        let part = filepath_part?;
+                        let entry = Entry {
+                            filename: part.to_str().unwrap().into(),
+                            mode: EntryKind::Blob.into(),
+                            oid: repo.write_blob_stream(File::open(part)?)?.into(),
+                        };
+                        Ok(entry)
+                    })
+                    .try_collect()?;
 
-        // does this commit contain changes in split parts?
-        let tree = committed.tree()?;
+                let tree = Tree { entries };
 
-        let patterns = get_patterns(repo)?;
+                let tree_id = repo.write_object(&tree)?;
+                let name = format!("/refs/split/{}", &tree_id);
+                let ref_id = repo
+                    .reference(name, tree_id, PreviousValue::MustNotExist, "")?
+                    .id();
 
-        // assuming this is relative to the root.
-        let paths_changed = tree
-            .iter()
-            .map(|result| -> Result<_> { Ok(result?) })
-            // keep only if the thing is a file.
-            .filter_ok(is_entry_file)
-            // keep only if it uses our filter.
-            .filter_ok(|entry| patterns_contains_entry(&patterns, entry))
-            // file names only
-            .flatten_ok_then(|entry| {
-                let pattern = create_git_parts_pattern(repo, entry.filename())?;
+                //
 
-                let files = glob(&pattern)?.map(|result| -> Result<_> { Ok(result?) });
-
-                let ding = files.map_ok_then(|filepath| {
-                    let id = repo.commit("", "", committed.id(), Some(committed.id()))?;
-
-                    let reference_name = format!("/refs/split/{id}");
-                    // create reference after not before.
-                    let reference =
-                        repo.reference(reference_name, id, PreviousValue::MustNotExist, "")?;
-
-                    Ok(())
-                });
-
-                // create ref
-
-                Ok(ding)
-            });
-
-        // for each filepath, read all the parts and add one per commit.
-        // creat refs for it locally?
-
-        // read split files.
-
-        // how to commit?
+                Ok(())
+            })
+            .try_collect()?;
 
         Ok(())
     }
+}
+
+struct Pointer {
+    /// The reference that points to the tree of parts with this file
+    /// sha256:<hash>
+    reference: String,
+
+    /// What format the pointer is, in case it were to change over time.
+    version: String,
 }
