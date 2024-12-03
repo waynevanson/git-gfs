@@ -1,4 +1,8 @@
-use std::{fs::File, io::Write, path::PathBuf};
+use std::{
+    fs::File,
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 use prng_split::AlphaPathSegment;
 
@@ -12,12 +16,12 @@ pub struct Splitter {
 }
 
 impl Splitter {
-    pub fn new(prefix: PathBuf, size: u64, factor: usize) -> Self {
+    pub fn new(prefix: impl AsRef<Path>, size: u64, factor: usize) -> Self {
         let suffix = AlphaPathSegment::from_factor(factor);
 
         Self {
             size,
-            prefix,
+            prefix: prefix.as_ref().to_path_buf(),
             suffix,
             remaining: size,
             writer: None,

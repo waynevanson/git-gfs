@@ -451,6 +451,7 @@ dependencies = [
  "log",
  "prng_split",
  "range-split",
+ "scopeguard",
  "serde",
  "tar",
  "toml",

@@ -1,6 +1,7 @@
 mod clean;
 mod install;
 mod map_ok_then;
+mod pointer;
 mod post_commit;
 mod splitter;
 mod track;

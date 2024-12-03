@@ -1,4 +1,7 @@
-use crate::map_ok_then::MapOkThen;
+use crate::{
+    map_ok_then::MapOkThen,
+    pointer::{HashType, Pointer},
+};
 use anyhow::{anyhow, Result};
 use clap::Parser;
 use gix::{
@@ -15,10 +18,9 @@ use gix::{
 };
 use glob::{glob, Paths};
 use itertools::Itertools;
-use serde::Serialize;
 use std::{
     collections::HashSet,
-    fs::{self, File},
+    fs::File,
     path::{Path, PathBuf},
 };
 
@@ -188,42 +190,6 @@ impl PostCommit {
             })
             .try_collect()?;
 
-        Ok(())
-    }
-}
-
-#[derive(Serialize, Default)]
-pub enum HashType {
-    SHA1,
-    #[default]
-    SHA256,
-}
-
-#[derive(Serialize, Default)]
-pub enum Version {
-    #[default]
-    One,
-}
-
-#[derive(Serialize)]
-pub struct Pointer {
-    hash_function: HashType,
-    hash: String,
-    version: Version,
-}
-
-impl Pointer {
-    pub fn from_sha(hash_function: HashType, hash: String) -> Self {
-        Self {
-            hash,
-            hash_function,
-            version: Version::default(),
-        }
-    }
-
-    pub fn write_to_file(&self, path: impl AsRef<Path>) -> Result<()> {
-        let contents = toml::to_string_pretty(&self)?;
-        fs::write(path, contents)?;
         Ok(())
     }
 }
