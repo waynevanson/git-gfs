@@ -1,5 +1,4 @@
 mod clean;
-mod flatten_ok_then;
 mod install;
 mod map_ok_then;
 mod post_commit;

@@ -155,7 +155,7 @@ impl PostCommit {
                 //
                 // need to remove file from latest commit
 
-                // Bro can I actually merge N+3 amount of commits?
+                // Bro I can actually merge N+3 amount of commits?
 
                 Ok(())
             })
