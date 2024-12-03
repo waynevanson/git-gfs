@@ -177,7 +177,7 @@ impl PostCommit {
                 let ref_id = create_reference(repo, tree_id)?;
 
                 let pointer = Pointer::from_sha(HashType::SHA256, ref_id.to_string());
-                pointer.write_to_file(filepath)?;
+                pointer.try_to_string(filepath)?;
 
                 // alright well I'm stuck here let's regroup later.
                 let index = repo.index()?;

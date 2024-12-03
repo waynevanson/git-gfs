@@ -1,6 +1,5 @@
 use anyhow::Result;
 use serde::Serialize;
-use std::path::Path;
 
 #[derive(Serialize, Default)]
 pub enum HashType {
@@ -32,9 +31,8 @@ impl Pointer {
         }
     }
 
-    pub fn write_to_file(&self, path: impl AsRef<Path>) -> Result<()> {
+    pub fn try_to_string(&self) -> Result<String> {
         let contents = toml::to_string_pretty(&self)?;
-        std::fs::write(path, contents)?;
-        Ok(())
+        Ok(contents)
     }
 }

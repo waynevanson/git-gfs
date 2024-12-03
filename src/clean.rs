@@ -1,4 +1,8 @@
-use crate::{map_ok_then::MapOkThen, splitter::Splitter};
+use crate::{
+    map_ok_then::MapOkThen,
+    pointer::{HashType, Pointer},
+    splitter::Splitter,
+};
 use anyhow::{anyhow, Result};
 use bytesize::ByteSize;
 use clap::Parser;
@@ -14,7 +18,7 @@ use itertools::Itertools;
 use scopeguard::defer_on_unwind;
 use std::{
     fs::{create_dir_all, remove_dir_all, File},
-    io::copy,
+    io::{copy, stdout, Write},
     path::{Path, PathBuf},
 };
 
@@ -47,9 +51,14 @@ impl Clean {
         let parts_file_dir = self.parts_file_dir(repo);
 
         self.split(&parts_file_dir)?;
+
         let reference_id = create_reference(repo, &parts_file_dir)?;
 
-        //  git add by adding to the index.
+        let pointer =
+            Pointer::from_sha(HashType::SHA256, reference_id.to_string()).try_to_string()?;
+
+        // todo: revert file to contents when unwinding, cat from parts.
+        stdout().write_all(pointer.as_bytes())?;
 
         Ok(())
     }
