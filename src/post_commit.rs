@@ -11,13 +11,14 @@ use gix::{
         Tree,
     },
     refs::transaction::PreviousValue,
-    Repository,
+    Id, Repository,
 };
-use glob::glob;
+use glob::{glob, Paths};
 use itertools::Itertools;
+use serde::Serialize;
 use std::{
     collections::HashSet,
-    fs::File,
+    fs::{self, File},
     path::{Path, PathBuf},
 };
 
@@ -80,13 +81,13 @@ fn create_git_parts_pattern(repo: &Repository, filename: &Path) -> Result<String
     Ok(pattern)
 }
 
-fn large_files_changed(repo: &Repository) -> Result<Vec<PathBuf>> {
+fn get_large_files_paths(repo: &Repository) -> Result<Vec<PathBuf>> {
     let tree = repo.head_commit()?.tree()?;
 
     let patterns = get_patterns(repo)?;
 
     // assuming this is relative to the root.
-    let paths_changed: Vec<_> = tree
+    let large_files_paths: Vec<_> = tree
         .iter()
         .map(|result| -> Result<_> { Ok(result?) })
         // keep only if the thing is a file.
@@ -96,7 +97,49 @@ fn large_files_changed(repo: &Repository) -> Result<Vec<PathBuf>> {
         .map_ok_then(|entry| Ok(entry.filename().to_path()?.to_path_buf()))
         .try_collect()?;
 
-    Ok(paths_changed)
+    Ok(large_files_paths)
+}
+
+fn get_unstaged_parts(repo: &Repository, filename: &Path) -> Result<Paths> {
+    let pattern = create_git_parts_pattern(repo, filename)?;
+    let parts = glob(&pattern)?;
+    Ok(parts)
+}
+
+fn create_entry_from_part(repo: &Repository, part: &Path) -> Result<Entry> {
+    let oid = repo.write_blob_stream(File::open(part)?)?.into();
+
+    let entry = Entry {
+        filename: part.to_str().unwrap().into(),
+        mode: EntryKind::Blob.into(),
+        oid,
+    };
+    Ok(entry)
+}
+
+fn create_entries(repo: &Repository, parts: Paths) -> Result<Vec<Entry>> {
+    let entries: Vec<_> = parts
+        .map(|result| -> Result<_> { Ok(result?) })
+        .map_ok_then(|part| create_entry_from_part(repo, &part))
+        .try_collect()?;
+
+    Ok(entries)
+}
+
+fn create_tree_id(repo: &Repository, parts: Paths) -> Result<Id<'_>> {
+    let entries = create_entries(repo, parts)?;
+    let tree = Tree { entries };
+    let tree_id = repo.write_object(&tree)?;
+    Ok(tree_id)
+}
+
+fn create_reference<'repo>(repo: &'repo Repository, tree_id: Id) -> Result<Id<'repo>> {
+    let name = format!("/refs/split/{}", &tree_id);
+    let ref_id = repo
+        .reference(name, tree_id, PreviousValue::MustNotExist, "")?
+        .id();
+
+    Ok(ref_id)
 }
 
 impl PostCommit {
@@ -122,40 +165,21 @@ impl PostCommit {
     /// 7. Replace the contents of the file with a pointer to the reference with some metadata.
     /// 8. Commit
     pub fn run(repo: &Repository) -> Result<()> {
-        let files = large_files_changed(repo)?;
+        let files = get_large_files_paths(repo)?;
 
         // nice!
         let files: Vec<_> = files
             .into_iter()
-            .map(|filepath| create_git_parts_pattern(repo, &filepath))
-            .map_ok_then(|pattern| Ok(glob(&pattern)?))
-            .map_ok_then(|filepaths_parts| -> Result<()> {
-                let entries: Vec<_> = filepaths_parts
-                    .map(|filepath_part| -> Result<_> {
-                        let part = filepath_part?;
-                        let entry = Entry {
-                            filename: part.to_str().unwrap().into(),
-                            mode: EntryKind::Blob.into(),
-                            oid: repo.write_blob_stream(File::open(part)?)?.into(),
-                        };
-                        Ok(entry)
-                    })
-                    .try_collect()?;
+            .map(|filepath| get_unstaged_parts(repo, &filepath))
+            .map_ok_then(|parts| -> Result<()> {
+                let tree_id = create_tree_id(repo, parts)?;
+                let ref_id = create_reference(repo, tree_id)?;
 
-                let tree = Tree { entries };
+                let pointer = Pointer::from_sha(HashType::SHA256, ref_id.to_string());
+                pointer.write_to_file("/fill/me/out/")?;
 
-                let tree_id = repo.write_object(&tree)?;
-                let name = format!("/refs/split/{}", &tree_id);
-                let ref_id = repo
-                    .reference(name, tree_id, PreviousValue::MustNotExist, "")?
-                    .id();
-
-                // now we need to write the pointer using the reference
-                // into the main file
-                //
                 // need to remove file from latest commit
-
-                // Bro I can actually merge N+3 amount of commits?
+                // replace the contents
 
                 Ok(())
             })
@@ -165,11 +189,38 @@ impl PostCommit {
     }
 }
 
-struct Pointer {
-    /// The reference that points to the tree of parts with this file
-    /// sha256:<hash>
-    reference: String,
+#[derive(Serialize, Default)]
+pub enum HashType {
+    SHA1,
+    #[default]
+    SHA256,
+}
 
-    /// What format the pointer is, in case it were to change over time.
-    version: String,
+#[derive(Serialize, Default)]
+pub enum Version {
+    #[default]
+    One,
+}
+
+#[derive(Serialize)]
+pub struct Pointer {
+    hash_function: HashType,
+    hash: String,
+    version: Version,
+}
+
+impl Pointer {
+    pub fn from_sha(hash_function: HashType, hash: String) -> Self {
+        Self {
+            hash,
+            hash_function,
+            version: Version::default(),
+        }
+    }
+
+    pub fn write_to_file(&self, path: impl AsRef<Path>) -> Result<()> {
+        let contents = toml::to_string_pretty(&self)?;
+        fs::write(path, contents)?;
+        Ok(())
+    }
 }
