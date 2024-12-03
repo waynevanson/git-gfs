@@ -178,8 +178,12 @@ impl PostCommit {
                 let pointer = Pointer::from_sha(HashType::SHA256, ref_id.to_string());
                 pointer.write_to_file("/fill/me/out/")?;
 
+                // alright well I'm stuck here let's regroup later.
+                let index = repo.index()?;
+
                 // need to remove file from latest commit
                 // replace the contents
+                // Well I could just add the file using git add ?
 
                 Ok(())
             })
