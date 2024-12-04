@@ -17,6 +17,8 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use track::Track;
 
+pub const REFS_NAMESPACE: &str = "/refs/gfs";
+
 #[derive(Deserialize, Serialize)]
 #[serde(rename = r#"filter "gfs""#)]
 pub struct FilterGfs {

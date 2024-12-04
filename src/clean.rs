@@ -79,7 +79,7 @@ fn create_reference(repo: &Repository, parts_file_dir: impl AsRef<Path>) -> Resu
 }
 
 fn create_tree_reference_id<'repo>(repo: &'repo Repository, tree_id: Id) -> Result<Id<'repo>> {
-    let name = format!("/refs/split/{}", &tree_id);
+    let name = format!("/refs/split/trees/{}", &tree_id);
     let ref_id = repo.reference(name, tree_id, PreviousValue::Any, "")?.id();
     Ok(ref_id)
 }
