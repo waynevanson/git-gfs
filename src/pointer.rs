@@ -1,7 +1,7 @@
 use anyhow::Result;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Default)]
+#[derive(Deserialize, Serialize, Default)]
 pub enum HashType {
     #[allow(dead_code)]
     SHA1,
@@ -9,17 +9,17 @@ pub enum HashType {
     SHA256,
 }
 
-#[derive(Serialize, Default)]
+#[derive(Deserialize, Serialize, Default)]
 pub enum Version {
     #[default]
     One,
 }
 
-#[derive(Serialize)]
+#[derive(Deserialize, Serialize)]
 pub struct Pointer {
-    hash_function: HashType,
-    hash: String,
-    version: Version,
+    pub hash_function: HashType,
+    pub hash: String,
+    pub version: Version,
 }
 
 impl Pointer {
