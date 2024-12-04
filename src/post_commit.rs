@@ -85,13 +85,15 @@ impl PostCommit {
 fn get_parent_id<'repo>(commit: &'repo Commit<'repo>) -> Result<Option<Id<'repo>>> {
     let mut parents = commit.parent_ids();
 
-    match (parents.next(), parents.next()) {
-        (Some(parent), None) => Ok(Some(parent)),
-        (None, None) => Err(anyhow!("Expected head commit to have a parent")),
-        // skip post commit, encountered merge commit (which has 2 or more parents)
-        (Some(_), Some(_)) => Ok(None),
-        _ => unreachable!("Expected iterator to only produce Some before None"),
+    let Some(parent) = parents.next() else {
+        return Err(anyhow!("Expected head commit to have a parent"));
+    };
+
+    if parents.next().is_some() {
+        return Ok(None);
     }
+
+    Ok(Some(parent))
 }
 
 fn get_patterns(repo: &Repository) -> Result<HashSet<Pattern>> {
