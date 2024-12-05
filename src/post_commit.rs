@@ -1,11 +1,9 @@
-use std::fs::read_to_string;
-
-use crate::{map_ok_then::MapOkThen, pointer::Pointer, REFS_NAMESPACE};
+use crate::{pointer::Pointer, REFS_NAMESPACE};
 use anyhow::{anyhow, Result};
 use clap::Parser;
 use gix::{
     attrs::search::Match,
-    bstr::ByteSlice,
+    bstr::{BString, ByteSlice},
     glob::{wildmatch::Mode, Pattern},
     hashtable::HashSet,
     object::tree::diff::Action,
@@ -13,6 +11,7 @@ use gix::{
     Commit, Id, ObjectId, Repository,
 };
 use itertools::Itertools;
+use std::fs::read_to_string;
 
 #[derive(Parser)]
 pub struct PostCommit;
@@ -36,6 +35,7 @@ impl PostCommit {
             .id();
 
         // git reset --hard HEAD~1
+        // TODO: move this down the stack.
         let mut branch = repo
             .head()?
             .try_into_referent()
@@ -52,49 +52,58 @@ impl PostCommit {
         let child_tree = child_commit.tree()?;
         let parent_tree = parent_commit.tree()?;
 
-        // get files that have changed.
-        let mut paths = vec![];
-        let mut platform = parent_tree.changes()?;
-
-        platform.for_each_to_obtain_tree(&child_tree, |change| -> Result<Action> {
-            use gix::object::tree::diff::Change::Deletion;
-
-            if !matches!(change, Deletion { .. }) {
-                paths.push(change.location().to_owned());
-            }
-
-            Ok(Action::Continue)
-        })?;
-
-        // ensure paths are for our big files
+        let paths = get_files_from_diff(&parent_tree, &child_tree)?;
 
         let child_object_id = commit_reference_id.object()?.id;
 
-        let pointers: Vec<_> = paths
-            .into_iter()
-            .filter(|bstr| {
-                patterns
-                    .iter()
-                    .any(|pattern| pattern.matches(bstr.as_ref(), Mode::NO_MATCH_SLASH_LITERAL))
-            })
-            .map(|bstr| -> Result<Pointer> {
-                let path = bstr.to_path()?;
-                let data = read_to_string(path)?;
-                let pointer = toml::from_str::<Pointer>(&data)?;
-                Ok(pointer)
-            })
-            .map_ok_then(|pointer| {
-                let object_id = ObjectId::try_from(pointer.hash.as_bytes())?;
-                Ok(object_id)
-            })
-            .chain(Some(Ok(child_object_id)))
-            .try_collect()?;
+        let mut pointers: Vec<_> = get_tree_references(paths, &patterns)?;
+        pointers.push(child_object_id);
 
         // read each file to get a pointer, to get the tree reference to add to the commits.
         let _merge_commit_id = repo.merge_base_octopus(pointers)?;
-
         Ok(())
     }
+}
+
+fn get_tree_references(paths: Vec<BString>, patterns: &HashSet<Pattern>) -> Result<Vec<ObjectId>> {
+    paths
+        .into_iter()
+        // ensure files are our big files.
+        .filter(|bstr| {
+            patterns
+                .iter()
+                .any(|pattern| pattern.matches(bstr.as_ref(), Mode::NO_MATCH_SLASH_LITERAL))
+        })
+        // read pointer form file system: working directory.
+        .map(|bstr| {
+            let path = bstr.to_path()?;
+            let data = read_to_string(path)?;
+            let pointer = toml::from_str::<Pointer>(&data)?;
+            let object_id = ObjectId::try_from(pointer.hash.as_bytes())?;
+            Ok(object_id)
+        })
+        .try_collect()
+}
+
+fn get_files_from_diff(
+    parent_tree: &gix::Tree<'_>,
+    child_tree: &gix::Tree<'_>,
+) -> Result<Vec<BString>> {
+    // get files that have changed.
+    let mut paths = vec![];
+    let mut platform = parent_tree.changes()?;
+
+    platform.for_each_to_obtain_tree(child_tree, |change| -> Result<Action> {
+        use gix::object::tree::diff::Change::Deletion;
+
+        if !matches!(change, Deletion { .. }) {
+            paths.push(change.location().to_owned());
+        }
+
+        Ok(Action::Continue)
+    })?;
+
+    Ok(paths)
 }
 
 fn get_parent_id<'repo>(commit: &'repo Commit<'repo>) -> Result<Option<Id<'repo>>> {
