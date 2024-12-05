@@ -1,10 +1,9 @@
+use prng_split::AlphaPathSegment;
 use std::{
     fs::File,
     io::Write,
     path::{Path, PathBuf},
 };
-
-use prng_split::AlphaPathSegment;
 
 /// Split a reader into parts.
 pub struct Splitter {

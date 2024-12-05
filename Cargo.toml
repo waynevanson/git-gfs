@@ -30,3 +30,7 @@ scopeguard = "1.2.0"
 
 [lints.clippy]
 pedantic = "warn"
+
+[dev-dependencies]
+assert_cmd = "2.0.16"
+predicates = "3.1.2"

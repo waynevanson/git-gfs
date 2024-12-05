@@ -3,6 +3,7 @@ mod install;
 mod map_ok_then;
 mod pointer;
 mod post_commit;
+mod smudge;
 mod splitter;
 mod track;
 
@@ -88,6 +89,7 @@ impl Command {
                 unimplemented!();
             }
             Self::Track(_) => {
+                // add pattern to .gitattributes for a file.
                 unimplemented!();
             }
 
@@ -95,6 +97,7 @@ impl Command {
                 unimplemented!();
             }
             Self::PrePush { .. } => {
+                // for now, push one pack at a time.
                 unimplemented!();
             }
         }
