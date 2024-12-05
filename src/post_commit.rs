@@ -1,15 +1,16 @@
+use std::fs::read_to_string;
+
 use crate::{map_ok_then::MapOkThen, pointer::Pointer, REFS_NAMESPACE};
 use anyhow::{anyhow, Result};
 use clap::Parser;
 use gix::{
     attrs::search::Match,
     bstr::ByteSlice,
-    glob::{wildmatch, Pattern},
+    glob::{wildmatch::Mode, Pattern},
     hashtable::HashSet,
-    object::tree::EntryRef,
-    objs::tree::EntryKind,
+    object::tree::diff::Action,
     refs::transaction::PreviousValue,
-    Commit, Id, Repository,
+    Commit, Id, ObjectId, Repository,
 };
 use itertools::Itertools;
 
@@ -20,17 +21,18 @@ impl PostCommit {
     pub fn run(repo: &mut Repository) -> Result<()> {
         // get branch the commit is on.
         // should always be here since this should be run post commit.
-        let commit = repo.head_commit()?;
+        let child_commit = repo.head_commit()?;
 
         // The commit before our commit, where we can merge stuff.
-        let Some(parent_id) = get_parent_id(&commit)? else {
+        // We have no parents, then we early return so we don't run this on merge commits
+        let Some(parent_id) = get_parent_id(&child_commit)? else {
             return Ok(());
         };
 
         // create reference to commit for use later during merge
-        let name = format!("{REFS_NAMESPACE}/commits/{}", commit.id());
+        let name = format!("{REFS_NAMESPACE}/commits/{}", child_commit.id());
         let commit_reference_id = repo
-            .reference(name, commit.id(), PreviousValue::Any, "")?
+            .reference(name, child_commit.id(), PreviousValue::Any, "")?
             .id();
 
         // git reset --hard HEAD~1
@@ -41,42 +43,55 @@ impl PostCommit {
 
         branch.set_target_id(parent_id, "")?;
 
-        // how to get all the trees?
-        // There's no parent.
-        // We could get all those in `refs/gfs/trees/*` and only get those that don't have children?
-        // If we end up adding parents to those trees, we'll be able to get the children from the parent that
-        // are in our custom refs.
-
-        // git merge branch <commit-reference-id> ...trees
-        // TODO: add the parts.
-        // BRO read all the pointers from big files in the commit?
-        // need to get the filteres lel
-
         let patterns = get_patterns(repo)?;
 
-        let worktree = repo
-            .worktree()
-            .ok_or_else(|| anyhow!("Expected to find work tree"))?;
+        let parent_commit = repo.head_commit()?;
 
-        let tree = commit.tree()?;
+        assert_ne!(parent_commit.id(), child_commit.id());
 
-        let files = tree
-            .iter()
-            .filter_ok(is_entry_file)
-            .filter_ok(|entry_ref| patterns_contains_entry_ref(&patterns, entry_ref))
-            .map(|result| -> Result<_> { Ok(result?) })
-            .map_ok_then(|entry_ref| {
-                // This assumes that object.data actually contains our file.
-                // But that doesn't make sense because it only contains changes.
-                //
-                // We have the file relative to the the parent tree, but not the full path so we can do the fs::read
-                let data = &entry_ref.object()?.data;
-                let pointer = toml::from_str::<Pointer>(data.to_str()?)?;
-                Ok(pointer.hash)
-            });
+        let child_tree = child_commit.tree()?;
+        let parent_tree = parent_commit.tree()?;
+
+        // get files that have changed.
+        let mut paths = vec![];
+        let mut platform = parent_tree.changes()?;
+
+        platform.for_each_to_obtain_tree(&child_tree, |change| -> Result<Action> {
+            use gix::object::tree::diff::Change::Deletion;
+
+            if !matches!(change, Deletion { .. }) {
+                paths.push(change.location().to_owned());
+            }
+
+            Ok(Action::Continue)
+        })?;
+
+        // ensure paths are for our big files
+
+        let child_object_id = commit_reference_id.object()?.id;
+
+        let pointers: Vec<_> = paths
+            .into_iter()
+            .filter(|bstr| {
+                patterns
+                    .iter()
+                    .any(|pattern| pattern.matches(bstr.as_ref(), Mode::NO_MATCH_SLASH_LITERAL))
+            })
+            .map(|bstr| -> Result<Pointer> {
+                let path = bstr.to_path()?;
+                let data = read_to_string(path)?;
+                let pointer = toml::from_str::<Pointer>(&data)?;
+                Ok(pointer)
+            })
+            .map_ok_then(|pointer| {
+                let object_id = ObjectId::try_from(pointer.hash.as_bytes())?;
+                Ok(object_id)
+            })
+            .chain(Some(Ok(child_object_id)))
+            .try_collect()?;
+
         // read each file to get a pointer, to get the tree reference to add to the commits.
-
-        let merge_commit_id = repo.merge_base_octopus(vec![commit_reference_id])?;
+        let _merge_commit_id = repo.merge_base_octopus(pointers)?;
 
         Ok(())
     }
@@ -123,20 +138,4 @@ fn has_split_attributes(r#match: &Match<'_>) -> bool {
         .map(|bstr| bstr == "split");
 
     matches!((is_filter, is_split), (true, Some(true)))
-}
-
-fn is_entry_file(entry: &EntryRef<'_, '_>) -> bool {
-    matches!(
-        entry.mode().kind(),
-        EntryKind::Blob | EntryKind::BlobExecutable
-    )
-}
-
-fn patterns_contains_entry_ref(patterns: &HashSet<Pattern>, entry_ref: &EntryRef<'_, '_>) -> bool {
-    patterns.iter().any(|pattern| {
-        pattern.matches(
-            entry_ref.filename(),
-            wildmatch::Mode::NO_MATCH_SLASH_LITERAL,
-        )
-    })
 }
