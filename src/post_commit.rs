@@ -52,7 +52,7 @@ impl PostCommit {
         let child_tree = child_commit.tree()?;
         let parent_tree = parent_commit.tree()?;
 
-        let paths = get_files_from_diff(&parent_tree, &child_tree)?;
+        let paths = get_non_deleted_files_from_diff(&parent_tree, &child_tree)?;
 
         let child_object_id = commit_reference_id.object()?.id;
 
@@ -65,6 +65,8 @@ impl PostCommit {
     }
 }
 
+/// Gets the object ids that are reference to trees containing parts of split files.
+/// The input `paths` are assumed to be from a diff, so we're not reading files in the work tree.
 fn get_tree_references(paths: Vec<BString>, patterns: &HashSet<Pattern>) -> Result<Vec<ObjectId>> {
     paths
         .into_iter()
@@ -85,7 +87,9 @@ fn get_tree_references(paths: Vec<BString>, patterns: &HashSet<Pattern>) -> Resu
         .try_collect()
 }
 
-fn get_files_from_diff(
+/// Retrieves a list of files that have been added, modified or rewritten.
+/// It does not include deleted files.
+fn get_non_deleted_files_from_diff(
     parent_tree: &gix::Tree<'_>,
     child_tree: &gix::Tree<'_>,
 ) -> Result<Vec<BString>> {
@@ -106,6 +110,13 @@ fn get_files_from_diff(
     Ok(paths)
 }
 
+/// Gets the parent id of a commit.
+///
+/// Returns `Some` when there is only 1 parent, and none when there is more than 1.
+///
+/// ## Error
+///
+/// 1. When there is no parent.
 fn get_parent_id<'repo>(commit: &'repo Commit<'repo>) -> Result<Option<Id<'repo>>> {
     let mut parents = commit.parent_ids();
 
@@ -120,6 +131,10 @@ fn get_parent_id<'repo>(commit: &'repo Commit<'repo>) -> Result<Option<Id<'repo>
     Ok(Some(parent))
 }
 
+/// Gets the patterns used by `git-gfs`.
+///
+/// When one of the patterns is used to match against a path and it returns true,
+/// that path (file) should be managed by `git-gfs`.
 fn get_patterns(repo: &Repository) -> Result<HashSet<Pattern>> {
     let worktree = repo
         .worktree()
@@ -130,21 +145,19 @@ fn get_patterns(repo: &Repository) -> Result<HashSet<Pattern>> {
     // all patterns contain our custom filter=split -text
     let patterns = attributes
         .iter()
-        .filter(has_split_attributes)
+        .filter(has_gfs_attributes_filter)
         .map(|r#match| r#match.pattern.to_owned())
         .collect::<HashSet<_>>();
 
     Ok(patterns)
 }
 
-fn has_split_attributes(r#match: &Match<'_>) -> bool {
+/// Checks to see if a match derived from `.gitattributes`
+/// matches the filter for `git-gfs`.
+fn has_gfs_attributes_filter(r#match: &Match<'_>) -> bool {
     let is_filter = r#match.assignment.name.as_str() == "filter";
 
-    let is_split = r#match
-        .assignment
-        .state
-        .as_bstr()
-        .map(|bstr| bstr == "split");
+    let is_gfs = r#match.assignment.state.as_bstr().map(|bstr| bstr == "gfs");
 
-    matches!((is_filter, is_split), (true, Some(true)))
+    matches!((is_filter, is_gfs), (true, Some(true)))
 }
