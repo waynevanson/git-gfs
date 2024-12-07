@@ -1,1 +1,1 @@
-*.json filter=gfs -text
+*.pbf filter=gfs -text

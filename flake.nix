@@ -42,6 +42,13 @@
           src = ./.;
           cargoClippyOptions = _: ["-A clippy::all"];
         };
+
+        git-gfs = naersk'.buildPackage {
+          name = "git-gfs";
+          version = "0.0.0";
+          src = ./.;
+        };
+
         nativeBuildInputs = with pkgs; [
           cargo-watch
           cargo-tarpaulin
@@ -59,6 +66,7 @@
           git
           openssl
           pkg-config
+          # git-gfs
         ];
 
         environment = {
@@ -86,19 +94,9 @@
         '';
         common = environment // {inherit nativeBuildInputs buildInputs shellHook;};
 
-        obfuscat = naersk'.buildPackage {
-          name = "obfuscat";
-          version = "0.0.0";
-          src = ./.;
-        };
 
-        # wrapper = pkgs.writeWrapperShellScriptBin "docker-compose"
-        # TODO: write an application that is the entrypoint to docker
-        # Prod would usually mean prod databases and in the cloud.
-        # We're never really going to prod.
-        # Our dev is the cargo watch -x run --bin elevated-cycling <fiules>
       in {
-        # packages.obfuscat = obfuscat;
+        packages.git-gfs = git-gfs;
         devShells.default = pkgs.mkShell common;
       }
     );

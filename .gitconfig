@@ -1,0 +1,3 @@
+[filter "gfs"]
+clean = "git gfs clean %f"
+smudge= "git gfs smudge %f"

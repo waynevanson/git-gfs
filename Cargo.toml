@@ -27,6 +27,8 @@ xz = "0.1.0"
 range-split = "0.4.0"
 prng_split = "0.1.0"
 scopeguard = "1.2.0"
+syn = "2.0.90"
+quote = "1.0.37"
 
 [lints.clippy]
 pedantic = "warn"
