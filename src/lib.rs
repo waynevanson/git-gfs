@@ -13,7 +13,7 @@ use gix::ThreadSafeRepository;
 use serde::{Deserialize, Serialize};
 use smudge::Smudge;
 
-pub const REFS_NAMESPACE: &str = "/refs/gfs";
+pub const REFS_NAMESPACE: &str = "refs/gfs";
 
 #[derive(Deserialize, Serialize)]
 #[serde(rename = r#"filter "gfs""#)]

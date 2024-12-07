@@ -66,7 +66,7 @@
           git
           openssl
           pkg-config
-          # git-gfs
+          git-gfs
         ];
 
         environment = {
