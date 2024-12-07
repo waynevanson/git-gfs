@@ -43,6 +43,7 @@ impl Default for FilterGfs {
 pub enum Command {
     Clean(Clean),
     Smudge(Smudge),
+    PostCommit,
 }
 
 // When a user pushes and git hooks are on, it should automatically
@@ -62,6 +63,13 @@ impl Command {
             }
             Self::Smudge(smudge) => {
                 smudge.run(&repo)?;
+            }
+            Self::PostCommit => {
+                // find all pointers that we have created/updated
+                // upload all missing references to objects related to pointers
+                // (blobs, trees) as their /refs/gfs/:commit
+                // then upload the merge commit
+                unimplemented!()
             }
         }
 
