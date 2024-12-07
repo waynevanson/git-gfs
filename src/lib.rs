@@ -41,14 +41,7 @@ impl Default for FilterGfs {
 
 #[derive(Parser)]
 pub enum Command {
-    // add git attribute with filter for file pattern.s
-    // split.
     Clean(Clean),
-    // join
-    // - Check to see if parts are stored in commits by checking location against contents of file.
-    // - Move them to `/git/parts`. How should I hash this so there's no conflicts?
-    // - Join and concat.
-    // read the pointer and get all the refs.
     Smudge(Smudge),
 }
 
