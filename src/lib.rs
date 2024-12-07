@@ -5,11 +5,15 @@ mod post_commit;
 mod smudge;
 mod splitter;
 
+use std::path::PathBuf;
+
 use anyhow::Result;
+use bytesize::ByteSize;
 use clap::Parser;
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 use clean::Clean;
 use gix::ThreadSafeRepository;
+use post_commit::PostCommit;
 use serde::{Deserialize, Serialize};
 use smudge::Smudge;
 
@@ -41,9 +45,13 @@ impl Default for FilterGfs {
 
 #[derive(Parser)]
 pub enum Command {
-    Clean(Clean),
+    Clean {
+        filepath: PathBuf,
+        #[arg(default_value_t = ByteSize::mb(50))]
+        size: ByteSize,
+    },
     Smudge(Smudge),
-    PostCommit,
+    PostCommit(PostCommit),
 }
 
 // When a user pushes and git hooks are on, it should automatically
@@ -55,25 +63,35 @@ impl Command {
     /// 1. Opening a repository.
     /// 2. Running sub commands
     pub fn run(self) -> Result<()> {
-        let repo = ThreadSafeRepository::open(".")?.to_thread_local();
+        let mut repo = ThreadSafeRepository::open(".")?.to_thread_local();
 
         match self {
-            Self::Clean(clean) => {
-                clean.run(&repo)?;
+            Self::Clean { filepath, size } => {
+                let clean = Clean::new(filepath, size)?;
+
+                clean.git_clean()?;
             }
             Self::Smudge(smudge) => {
                 smudge.run(&repo)?;
             }
-            Self::PostCommit => {
+            Self::PostCommit(post_commit) => {
+                PostCommit::run(&mut repo)?;
                 // find all pointers that we have created/updated
                 // upload all missing references to objects related to pointers
                 // (blobs, trees) as their /refs/gfs/:commit
                 // then upload the merge commit
-                unimplemented!()
             }
         }
 
         Ok(())
+    }
+
+    /// Returns `true` if the command is [`Clean`].
+    ///
+    /// [`Clean`]: Command::Clean
+    #[must_use]
+    pub fn is_clean(&self) -> bool {
+        matches!(self, Self::Clean { .. })
     }
 }
 
