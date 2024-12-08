@@ -1,8 +1,4 @@
-use crate::{
-    map_ok_then::MapOkThen,
-    splitter::Splitter,
-    REFS_NAMESPACE,
-};
+use crate::{map_ok_then::MapOkThen, pointer::Pointer, splitter::Splitter, REFS_NAMESPACE};
 use anyhow::{anyhow, Result};
 use bytesize::ByteSize;
 use gix::{
@@ -17,7 +13,7 @@ use itertools::Itertools;
 use scopeguard::defer_on_unwind;
 use std::{
     fs::{create_dir_all, remove_dir_all, File},
-    io::copy,
+    io::{copy, stdout, Write},
     path::{Path, PathBuf},
 };
 
@@ -34,13 +30,27 @@ impl Clean {
         let repo = ThreadSafeRepository::open(".")?.to_thread_local();
         let parts_file_dir = repo.path().join("parts").join(&filepath);
 
-        let clean = Self { filepath, size, repo, parts_file_dir };
+        let clean = Self {
+            filepath,
+            size,
+            repo,
+            parts_file_dir,
+        };
 
         Ok(clean)
     }
 
     pub fn git_clean(&self) -> Result<()> {
         self.split()?;
+
+        let reference_id = self.create_reference_id()?;
+
+        let pointer = Pointer::from_sha(crate::pointer::HashType::SHA256, reference_id.to_string())
+            .try_to_string()?;
+
+        // print to stdout
+        stdout().write_all(pointer.as_bytes())?;
+
         Ok(())
     }
 
@@ -81,7 +91,7 @@ impl Clean {
         Ok(entry)
     }
 
-    fn create_reference(&self) -> Result<Id<'_>> {
+    fn create_reference_id(&self) -> Result<Id<'_>> {
         let parts = self.create_parts_as_entries()?;
         let tree_id = create_tree_id(&self.repo, parts)?;
         let id = create_tree_reference_id(&self.repo, tree_id)?;
