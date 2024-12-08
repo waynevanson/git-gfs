@@ -1,4 +1,4 @@
-use crate::{map_ok_then::MapOkThen, pointer::Pointer, splitter::Splitter, REFS_NAMESPACE};
+use crate::{create_gfs_ref, map_ok_then::MapOkThen, pointer::Pointer, splitter::Splitter};
 use anyhow::{anyhow, Result};
 use bytesize::ByteSize;
 use gix::{
@@ -45,8 +45,10 @@ impl Clean {
 
         let reference_id = self.create_reference_id()?;
 
-        let pointer = Pointer::from_sha(crate::pointer::HashType::SHA256, reference_id.to_string())
-            .try_to_string()?;
+        let pointer = Pointer::V1 {
+            hash: reference_id.to_string(),
+        }
+        .try_to_string()?;
 
         // print to stdout
         stdout().write_all(pointer.as_bytes())?;
@@ -110,7 +112,7 @@ impl Clean {
 }
 
 fn create_tree_reference_id<'repo>(repo: &'repo Repository, tree_id: Id) -> Result<Id<'repo>> {
-    let name = format!("{REFS_NAMESPACE}/{tree_id}");
+    let name = create_gfs_ref(tree_id);
     let ref_id = repo.reference(name, tree_id, PreviousValue::Any, "")?.id();
     Ok(ref_id)
 }

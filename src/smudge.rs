@@ -1,37 +1,45 @@
-use crate::REFS_NAMESPACE;
+use crate::create_gfs_ref;
 use crate::{map_ok_then::MapOkThen, pointer::Pointer};
 use anyhow::{anyhow, Result};
-use clap::Parser;
 use core::str;
-use gix::Repository;
+use gix::{Repository, ThreadSafeRepository};
 use itertools::Itertools;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 
-#[derive(Parser)]
 pub struct Smudge {
     path: PathBuf,
+    repo: Repository,
 }
 
 // check file contents in index.
 // concatente parts
 impl Smudge {
-    pub fn run(&self, repo: &Repository) -> anyhow::Result<()> {
-        let index = repo.index_or_empty()?;
-        let path = repo.path().to_str().ok_or_else(|| anyhow!("lol"))?;
+    pub fn new(filepath: PathBuf) -> Result<Self> {
+        let repo = ThreadSafeRepository::open(".")?.to_thread_local();
+        let smudge = Self {
+            path: filepath,
+            repo,
+        };
+        Ok(smudge)
+    }
+
+    pub fn git_smudge(&self) -> anyhow::Result<()> {
+        let index = self.repo.index_or_empty()?;
+        let path = self.repo.path().to_str().ok_or_else(|| anyhow!("lol"))?;
         let file = index
             .entry_by_path(path.into())
             .ok_or_else(|| anyhow!("Wowzers"))?;
 
-        let blob = repo.find_blob(file.id)?;
+        let blob = self.repo.find_blob(file.id)?;
         let string = str::from_utf8(&blob.data)?;
-        let pointer: Pointer = toml::from_str(string)?;
+        let pointer: Pointer = serde_json::from_str(string)?;
 
-        let hash = pointer.hash;
+        let hash = pointer.hash();
 
         // get reference
-        let mut reference = repo.find_reference(&format!("{REFS_NAMESPACE}/{hash}"))?;
+        let mut reference = self.repo.find_reference(&create_gfs_ref(hash))?;
         let tree = reference.peel_to_tree()?;
         let datas: Vec<_> = tree
             .iter()

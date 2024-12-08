@@ -1,6 +1,5 @@
-use crate::{pointer::Pointer, REFS_NAMESPACE};
+use crate::{create_gfs_ref, pointer::Pointer};
 use anyhow::{anyhow, Result};
-use clap::Parser;
 use gix::{
     attrs::search::Match,
     bstr::{BString, ByteSlice},
@@ -8,19 +7,30 @@ use gix::{
     hashtable::HashSet,
     object::tree::diff::Action,
     refs::transaction::PreviousValue,
-    Commit, Id, ObjectId, Repository,
+    Commit, Id, ObjectId, Repository, ThreadSafeRepository,
 };
 use itertools::Itertools;
+use log::debug;
+use scopeguard::defer_on_unwind;
 use std::fs::read_to_string;
 
-#[derive(Parser)]
-pub struct PostCommit;
+pub struct PostCommit {
+    repo: Repository,
+}
 
 impl PostCommit {
-    pub fn run(repo: &mut Repository) -> Result<()> {
+    pub fn new() -> Result<Self> {
+        let repo = ThreadSafeRepository::open(".")?.to_thread_local();
+        let post_commit = Self { repo };
+        Ok(post_commit)
+    }
+
+    pub fn git_post_commit(&mut self) -> Result<()> {
         // get branch the commit is on.
         // should always be here since this should be run post commit.
-        let child_commit = repo.head_commit()?;
+        let child_commit = self.repo.head_commit()?;
+
+        debug!("child_commit: {child_commit:?}");
 
         // The commit before our commit, where we can merge stuff.
         // We have no parents, then we early return so we don't run this on merge commits
@@ -28,24 +38,36 @@ impl PostCommit {
             return Ok(());
         };
 
+        debug!("parent_commit: {parent_id}");
+
         // create reference to commit for use later during merge
-        let name = format!("{REFS_NAMESPACE}/commits/{}", child_commit.id());
-        let commit_reference_id = repo
+        let name = create_gfs_ref(child_commit.id());
+        let commit_reference_id = self
+            .repo
             .reference(name, child_commit.id(), PreviousValue::Any, "")?
             .id();
 
+        debug!("commit_reference_id:{commit_reference_id}");
+
         // git reset --hard HEAD~1
         // TODO: move this down the stack.
-        let mut branch = repo
+        let mut branch = self
+            .repo
             .head()?
             .try_into_referent()
             .ok_or_else(|| anyhow!("Expected HEAD to be attached to a branch"))?;
 
         branch.set_target_id(parent_id, "")?;
+        defer_on_unwind!(branch.set_target_id(child_commit.id(), "").unwrap(););
 
-        let patterns = get_patterns(repo)?;
+        debug!("parent_commit: {parent_id}");
 
-        let parent_commit = repo.head_commit()?;
+        let patterns = get_patterns(&self.repo)?;
+        debug!("patterns:{patterns:?}");
+
+        let parent_commit = self.repo.head_commit()?;
+
+        debug!("new_parent_commit: {parent_commit:?}");
 
         assert_ne!(parent_commit.id(), child_commit.id());
 
@@ -59,8 +81,12 @@ impl PostCommit {
         let mut pointers: Vec<_> = get_tree_references(paths, &patterns)?;
         pointers.push(child_object_id);
 
+        debug!("pointers:{pointers:?}");
+
         // read each file to get a pointer, to get the tree reference to add to the commits.
-        let _merge_commit_id = repo.merge_base_octopus(pointers)?;
+        let merge_commit_id = self.repo.merge_base_octopus(pointers)?;
+
+        debug!("merged:{merge_commit_id:?}");
         Ok(())
     }
 }
@@ -80,8 +106,8 @@ fn get_tree_references(paths: Vec<BString>, patterns: &HashSet<Pattern>) -> Resu
         .map(|bstr| {
             let path = bstr.to_path()?;
             let data = read_to_string(path)?;
-            let pointer = toml::from_str::<Pointer>(&data)?;
-            let object_id = ObjectId::try_from(pointer.hash.as_bytes())?;
+            let pointer = serde_json::from_str::<Pointer>(&data)?;
+            let object_id = ObjectId::try_from(pointer.hash().as_bytes())?;
             Ok(object_id)
         })
         .try_collect()
