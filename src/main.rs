@@ -16,6 +16,7 @@ enum Command {
         filepath: PathBuf,
     },
     PostCommit,
+    // PrePush - find missing refs, push one at a time.
 }
 
 #[derive(Parser)]

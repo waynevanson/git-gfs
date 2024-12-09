@@ -7,7 +7,7 @@ use gix::{
     hashtable::HashSet,
     object::tree::diff::Action,
     refs::transaction::PreviousValue,
-    Commit, Id, ObjectId, Repository, ThreadSafeRepository,
+    Commit, Id, ObjectId, Reference, Repository, ThreadSafeRepository,
 };
 use itertools::Itertools;
 use log::debug;
@@ -51,11 +51,7 @@ impl PostCommit {
 
         // git reset --hard HEAD~1
         // TODO: move this down the stack.
-        let mut branch = self
-            .repo
-            .head()?
-            .try_into_referent()
-            .ok_or_else(|| anyhow!("Expected HEAD to be attached to a branch"))?;
+        let mut branch = self.head_branch()?;
 
         branch.set_target_id(parent_id, "")?;
         defer_on_unwind!(branch.set_target_id(child_commit.id(), "").unwrap(););
@@ -85,9 +81,28 @@ impl PostCommit {
 
         // read each file to get a pointer, to get the tree reference to add to the commits.
         let merge_commit_id = self.repo.merge_base_octopus(pointers)?;
-
         debug!("merged:{merge_commit_id:?}");
+
+        // store this merge commit in our refs
+        let name = create_gfs_ref(merge_commit_id);
+        self.repo
+            .reference(name, merge_commit_id, PreviousValue::Any, "")?;
+
+        // revert repo back to the original HEAD now merge ref is stored.
+
+        let mut branch = self.head_branch()?;
+        branch.set_target_id(child_object_id, "")?;
+
+        debug!("branch_reset:{child_object_id}");
+
         Ok(())
+    }
+
+    fn head_branch(&self) -> Result<Reference<'_>> {
+        self.repo
+            .head()?
+            .try_into_referent()
+            .ok_or_else(|| anyhow!("Expected HEAD to be attached to a branch"))
     }
 }
 
