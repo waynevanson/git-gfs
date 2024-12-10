@@ -5,6 +5,7 @@ use gix::Repository;
 use std::io::{stdout, Write};
 use std::path::Path;
 
+// todo: what about if there's no index, or we're running git clone and all refs are online?
 pub fn smudge(repo: &Repository, filepath: impl AsRef<Path>) -> Result<()> {
     let index = repo.index_or_empty()?;
     let path = filepath
@@ -14,7 +15,7 @@ pub fn smudge(repo: &Repository, filepath: impl AsRef<Path>) -> Result<()> {
 
     let file_entry = index
         .entry_by_path(path.into())
-        .ok_or_else(|| anyhow!("Expected to find the entry "))?;
+        .ok_or_else(|| anyhow!("Expected to find the entry"))?;
 
     let blob = repo.find_blob(file_entry.id)?;
     let pointer: Pointer = serde_json::from_slice(&blob.data)?;
@@ -22,6 +23,8 @@ pub fn smudge(repo: &Repository, filepath: impl AsRef<Path>) -> Result<()> {
 
     // get reference
     let mut reference = repo.find_reference(&create_gfs_ref(hash))?;
+
+    // all children are parts (blobs)
     let tree = reference.peel_to_tree()?;
 
     for entry in tree.iter() {

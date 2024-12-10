@@ -2,7 +2,7 @@ use anyhow::Result;
 use bytesize::ByteSize;
 use clap::Parser;
 use clap_verbosity_flag::{InfoLevel, Verbosity};
-use git_file_storage::{clean, smudge, PostCommit, Smudge};
+use git_file_storage::{clean, pre_push, smudge};
 use gix::ThreadSafeRepository;
 use std::path::PathBuf;
 
@@ -16,8 +16,7 @@ enum Command {
     Smudge {
         filepath: PathBuf,
     },
-    PostCommit,
-    // PrePush - find missing refs, push one at a time.
+    PrePush,
 }
 
 #[derive(Parser)]
@@ -36,19 +35,17 @@ fn main() -> Result<()> {
         .filter_level(args.verbosity.log_level_filter())
         .try_init()?;
 
-    let repo = ThreadSafeRepository::open(".")?.to_thread_local();
+    let mut repo = ThreadSafeRepository::open(".")?.to_thread_local();
 
     match args.command {
-        // Maybe we should just have functions that do the action,
-        // and use the stucts we have to localise state
         Command::Clean { filepath, size } => {
             clean(&repo, filepath, size)?;
         }
         Command::Smudge { filepath } => {
             smudge(&repo, filepath)?;
         }
-        Command::PostCommit => {
-            PostCommit::new()?.git_post_commit()?;
+        Command::PrePush => {
+            pre_push(&mut repo)?;
         }
     };
 
