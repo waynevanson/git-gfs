@@ -7,7 +7,7 @@ use gix::{
         Tree,
     },
     refs::transaction::PreviousValue,
-    Id, Repository, ThreadSafeRepository,
+    Id, Repository,
 };
 use itertools::Itertools;
 use scopeguard::defer_on_unwind;
@@ -17,98 +17,90 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub struct Clean {
-    filepath: PathBuf,
-    size: ByteSize,
-    repo: Repository,
-    /// `.git/parts/<filepath>`
-    parts_file_dir: PathBuf,
+pub fn clean(repo: Repository, filepath: PathBuf, size: ByteSize) -> Result<()> {
+    let parts_file_dir = repo.path().join("parts").join(&filepath);
+    split(filepath, &parts_file_dir, size)?;
+
+    let pointer = create_pointer(&repo, &parts_file_dir)?;
+    write_pointer(&pointer)?;
+
+    Ok(())
 }
 
-impl Clean {
-    pub fn new(filepath: PathBuf, size: ByteSize) -> Result<Self> {
-        let repo = ThreadSafeRepository::open(".")?.to_thread_local();
-        let parts_file_dir = repo.path().join("parts").join(&filepath);
+fn create_pointer(repo: &Repository, parts_file_dir: impl AsRef<Path>) -> Result<Pointer> {
+    let reference_id = create_reference_id(repo, &parts_file_dir)?;
+    let pointer = Pointer::from(reference_id.to_string());
+    Ok(pointer)
+}
 
-        let clean = Self {
-            filepath,
-            size,
-            repo,
-            parts_file_dir,
-        };
+fn write_pointer(pointer: &Pointer) -> Result<()> {
+    let contents = pointer.try_to_string()?;
 
-        Ok(clean)
-    }
+    // write to file
+    stdout().write_all(contents.as_bytes())?;
 
-    pub fn git_clean(&self) -> Result<()> {
-        self.split()?;
+    Ok(())
+}
 
-        let reference_id = self.create_reference_id()?;
+/// Split a file a `filepath` into pieces (ie. `aaaa`, `aaab`, `aaac`)
+/// into pieces with the max size of `size` into the `target_directory`
+fn split(
+    source_file: impl AsRef<Path>,
+    target_dir: impl AsRef<Path>,
+    size: ByteSize,
+) -> Result<()> {
+    defer_on_unwind!(remove_dir_all(&target_dir).unwrap());
+    create_dir_all(&target_dir)?;
 
-        let pointer = Pointer::V1 {
-            hash: reference_id.to_string(),
-        }
-        .try_to_string()?;
+    let mut writer = Splitter::new(&target_dir, size.as_u64(), 4);
+    let mut reader = File::open(&source_file)?;
 
-        // print to stdout
-        stdout().write_all(pointer.as_bytes())?;
+    copy(&mut reader, &mut writer)?;
 
-        Ok(())
-    }
+    Ok(())
+}
 
-    /// Split a file a `filepath` into pieces (ie. `aaaa`, `aaab`, `aaac`)
-    /// into pieces with the max size of `size` into the `target_directory`
-    fn split(&self) -> Result<()> {
-        defer_on_unwind!(remove_dir_all(&self.parts_file_dir).unwrap());
-        create_dir_all(&self.parts_file_dir)?;
+fn create_reference_id(repo: &Repository, parts_file_dir: impl AsRef<Path>) -> Result<Id<'_>> {
+    let parts = create_parts_as_entries(repo, parts_file_dir)?;
+    let tree_id = create_tree_id(repo, parts)?;
+    let id = create_tree_reference_id(repo, tree_id)?;
+    Ok(id)
+}
 
-        let mut writer = Splitter::new(&self.parts_file_dir, self.size.as_u64(), 4);
-        let mut reader = File::open(&self.filepath)?;
+/// Read the content of a file part from `part_path`,
+/// creates a blob in our reference namespaces
+/// and returns and entry (for use in creating a tree).
+fn create_entry_from_part(repo: &Repository, part_path: &Path) -> Result<Entry> {
+    let file = File::open(part_path)?;
 
-        copy(&mut reader, &mut writer)?;
+    let filename = part_path
+        .to_str()
+        .ok_or_else(|| anyhow!("Expected file path to be a string"))?
+        .into();
 
-        Ok(())
-    }
+    // todo: delete blob when unwinding
+    let oid = repo.write_blob_stream(file)?.into();
 
-    /// Read the content of a file part from `part_path`,
-    /// creates a blob in our reference namespaces
-    /// and returns and entry (for use in creating a tree).
-    fn create_entry_from_part(&self, part_path: &Path) -> Result<Entry> {
-        let file = File::open(part_path)?;
+    let entry = Entry {
+        filename,
+        mode: EntryKind::Blob.into(),
+        oid,
+    };
 
-        let filename = part_path
-            .to_str()
-            .ok_or_else(|| anyhow!("Expected file path to be a string"))?
-            .into();
+    Ok(entry)
+}
 
-        // todo: delete blob when unwinding
-        let oid = self.repo.write_blob_stream(file)?.into();
+fn create_parts_as_entries(
+    repo: &Repository,
+    parts_file_dir: impl AsRef<Path>,
+) -> Result<Vec<Entry>> {
+    let parts = std::fs::read_dir(&parts_file_dir)?
+        .map(|result| -> Result<_> { Ok(result?) })
+        .map_ok(|dir_entry| dir_entry.path())
+        .map_ok_then(|part_path| create_entry_from_part(repo, &part_path))
+        .try_collect()?;
 
-        let entry = Entry {
-            filename,
-            mode: EntryKind::Blob.into(),
-            oid,
-        };
-
-        Ok(entry)
-    }
-
-    fn create_reference_id(&self) -> Result<Id<'_>> {
-        let parts = self.create_parts_as_entries()?;
-        let tree_id = create_tree_id(&self.repo, parts)?;
-        let id = create_tree_reference_id(&self.repo, tree_id)?;
-        Ok(id)
-    }
-
-    fn create_parts_as_entries(&self) -> Result<Vec<Entry>> {
-        let parts = std::fs::read_dir(&self.parts_file_dir)?
-            .map(|result| -> Result<_> { Ok(result?) })
-            .map_ok(|dir_entry| dir_entry.path())
-            .map_ok_then(|part_path| self.create_entry_from_part(&part_path))
-            .try_collect()?;
-
-        Ok(parts)
-    }
+    Ok(parts)
 }
 
 fn create_tree_reference_id<'repo>(repo: &'repo Repository, tree_id: Id) -> Result<Id<'repo>> {

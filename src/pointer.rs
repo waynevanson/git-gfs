@@ -7,6 +7,12 @@ pub enum Pointer {
     V1 { hash: String },
 }
 
+impl From<String> for Pointer {
+    fn from(value: String) -> Self {
+        Self::V1 { hash: value }
+    }
+}
+
 impl Pointer {
     pub fn try_to_string(&self) -> Result<String> {
         let contents = serde_json::to_string_pretty(self)?;

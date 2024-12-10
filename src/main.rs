@@ -2,7 +2,8 @@ use anyhow::Result;
 use bytesize::ByteSize;
 use clap::Parser;
 use clap_verbosity_flag::{InfoLevel, Verbosity};
-use git_file_storage::{Clean, PostCommit, Smudge};
+use git_file_storage::{clean, PostCommit, Smudge};
+use gix::ThreadSafeRepository;
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -35,9 +36,13 @@ fn main() -> Result<()> {
         .filter_level(args.verbosity.log_level_filter())
         .try_init()?;
 
+    let repo = ThreadSafeRepository::open(".")?.to_thread_local();
+
     match args.command {
+        // Maybe we should just have functions that do the action,
+        // and use the stucts we have to localise state
         Command::Clean { filepath, size } => {
-            Clean::new(filepath, size)?.git_clean()?;
+            clean(repo, filepath, size)?;
         }
         Command::Smudge { filepath } => {
             Smudge::new(filepath)?.git_smudge()?;
