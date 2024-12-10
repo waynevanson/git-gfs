@@ -17,11 +17,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub fn clean(repo: Repository, filepath: PathBuf, size: ByteSize) -> Result<()> {
+pub fn clean(repo: &Repository, filepath: PathBuf, size: ByteSize) -> Result<()> {
     let parts_file_dir = repo.path().join("parts").join(&filepath);
     split(filepath, &parts_file_dir, size)?;
 
-    let pointer = create_pointer(&repo, &parts_file_dir)?;
+    let pointer = create_pointer(repo, &parts_file_dir)?;
     write_pointer(&pointer)?;
 
     Ok(())

@@ -2,7 +2,7 @@ use anyhow::Result;
 use bytesize::ByteSize;
 use clap::Parser;
 use clap_verbosity_flag::{InfoLevel, Verbosity};
-use git_file_storage::{clean, PostCommit, Smudge};
+use git_file_storage::{clean, smudge, PostCommit, Smudge};
 use gix::ThreadSafeRepository;
 use std::path::PathBuf;
 
@@ -42,10 +42,10 @@ fn main() -> Result<()> {
         // Maybe we should just have functions that do the action,
         // and use the stucts we have to localise state
         Command::Clean { filepath, size } => {
-            clean(repo, filepath, size)?;
+            clean(&repo, filepath, size)?;
         }
         Command::Smudge { filepath } => {
-            Smudge::new(filepath)?.git_smudge()?;
+            smudge(&repo, filepath)?;
         }
         Command::PostCommit => {
             PostCommit::new()?.git_post_commit()?;
