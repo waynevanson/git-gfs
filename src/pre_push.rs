@@ -11,7 +11,10 @@ use gix::{
     Id, ObjectId, Repository,
 };
 use itertools::Itertools;
-use std::io::{stdin, Read};
+use std::{
+    io::{stdin, Read},
+    process::Command,
+};
 
 // get all the commits within the range (from stdin)
 // get list of files for each commit & `.gitattributes`
@@ -24,10 +27,26 @@ pub fn pre_push(repo: &mut Repository) -> Result<()> {
     // rev_walk?
     let bstr = bstring_from_stdin()?;
     let tips = spec_tips_from_bstr(repo, bstr.as_ref())?;
+    let pushable_references = get_pushable_references(repo, tips)?;
+
+    // push all the tree refs
+    // this isn't part of gix yet.
+    // we'll have to use git to manage this.
+    // git push :hash
+
+    for reference in pushable_references {
+        Command::new("git")
+            .args(["push", reference.as_str()])
+            .status()?;
+    }
+
+    Ok(())
+}
+
+fn get_pushable_references(repo: &Repository, tips: [Id<'_>; 2]) -> Result<HashSet<String>> {
+    let mut pointers = HashSet::<String>::new();
 
     let infos = repo.rev_walk(tips).all()?;
-
-    let mut pointers = HashSet::<String>::new();
 
     for info in infos {
         // get files for each object?
@@ -54,12 +73,7 @@ pub fn pre_push(repo: &mut Repository) -> Result<()> {
         }
     }
 
-    // push all the tree refs
-    // this isn't part of gix yet.
-    // we'll have to use git to manage this.
-    // git push :hash
-
-    todo!("pre-push hook not completely implemented");
+    Ok(pointers)
 }
 
 fn is_entry_blob_matching_pattern(entry: &Entry, patterns: &HashSet<Pattern>) -> bool {
@@ -90,6 +104,8 @@ fn get_git_attributes_patterns(entry_ref: EntryRef<'_, '_>) -> Result<HashSet<Pa
 
     // todo: find patterns, including attrs.
     let _lines = parse_attributes_from_bytes(data.as_slice());
+
+    todo!("Bro gotta parse those attributes so we can get patterns so we know what files to get pointers for");
 
     Ok(patterns)
 }
