@@ -1,7 +1,14 @@
+use crate::{create_gfs_ref, Pointer};
 use anyhow::{anyhow, Result};
 use gix::{
+    attrs::parse as parse_attributes_from_bytes,
     bstr::{BStr, BString, ByteSlice},
-    Id, Repository,
+    glob::{wildmatch, Pattern},
+    hashtable::hash_set::HashSet,
+    object::tree::EntryRef,
+    objs::tree::EntryKind,
+    traverse::tree::recorder::Entry,
+    Id, ObjectId, Repository,
 };
 use itertools::Itertools;
 use std::io::{stdin, Read};
@@ -16,12 +23,75 @@ pub fn pre_push(repo: &mut Repository) -> Result<()> {
     // get a list of commits that we're going to push.
     // rev_walk?
     let bstr = bstring_from_stdin()?;
-
     let tips = spec_tips_from_bstr(repo, bstr.as_ref())?;
 
-    let _walk = repo.rev_walk(tips).first_parent_only().all()?;
+    let infos = repo.rev_walk(tips).all()?;
 
-    todo!("pre-push hook not implemented");
+    let mut pointers = HashSet::<String>::new();
+
+    for info in infos {
+        // get files for each object?
+        let tree = info?.object()?.tree()?;
+
+        // no git attributes means no things to do.
+        let Some(gitattributes) = tree.find_entry(".gitattributes") else {
+            continue;
+        };
+
+        let patterns = get_git_attributes_patterns(gitattributes)?;
+
+        // file names
+        let files = tree
+            .traverse()
+            .breadthfirst
+            .files()?
+            .into_iter()
+            .filter(|entry| is_entry_blob_matching_pattern(entry, &patterns))
+            .map(|entry| get_pointer_full_reference_pointer_oid(repo, entry.oid));
+
+        for file in files {
+            pointers.insert(file?);
+        }
+    }
+
+    // push all the tree refs
+    // this isn't part of gix yet.
+    // we'll have to use git to manage this.
+    // git push :hash
+
+    todo!("pre-push hook not completely implemented");
+}
+
+fn is_entry_blob_matching_pattern(entry: &Entry, patterns: &HashSet<Pattern>) -> bool {
+    entry.mode.kind() == EntryKind::Blob
+        && patterns.iter().any(|pattern| {
+            pattern.matches(
+                entry.filepath.as_ref(),
+                wildmatch::Mode::NO_MATCH_SLASH_LITERAL,
+            )
+        })
+}
+
+fn get_pointer_full_reference_pointer_oid(
+    repo: &Repository,
+    oid: impl Into<ObjectId>,
+) -> Result<String> {
+    let contents = &repo.find_blob(oid)?.data;
+    let pointer: Pointer = serde_json::from_slice(contents.as_slice())?;
+    let hash = pointer.hash();
+    let reference = create_gfs_ref(hash);
+    Ok(reference)
+}
+
+fn get_git_attributes_patterns(entry_ref: EntryRef<'_, '_>) -> Result<HashSet<Pattern>> {
+    let patterns = HashSet::new();
+
+    let data = &entry_ref.object()?.data;
+
+    // todo: find patterns, including attrs.
+    let _lines = parse_attributes_from_bytes(data.as_slice());
+
+    Ok(patterns)
 }
 
 fn bstring_from_stdin() -> Result<BString> {
