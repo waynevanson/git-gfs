@@ -1,7 +1,10 @@
 use crate::{create_gfs_ref, Pointer};
 use anyhow::{anyhow, Result};
 use gix::{
-    attrs::parse as parse_attributes_from_bytes,
+    attrs::{
+        parse::{Kind, Lines},
+        AssignmentRef,
+    },
     bstr::{BStr, BString, ByteSlice},
     glob::{wildmatch, Pattern},
     hashtable::hash_set::HashSet,
@@ -12,6 +15,7 @@ use gix::{
 };
 use itertools::Itertools;
 use std::{
+    collections::HashMap,
     io::{stdin, Read},
     process::Command,
 };
@@ -76,38 +80,75 @@ fn get_pushable_references(repo: &Repository, tips: [Id<'_>; 2]) -> Result<HashS
     Ok(pointers)
 }
 
-fn is_entry_blob_matching_pattern(entry: &Entry, patterns: &HashSet<Pattern>) -> bool {
-    entry.mode.kind() == EntryKind::Blob
-        && patterns.iter().any(|pattern| {
-            pattern.matches(
-                entry.filepath.as_ref(),
-                wildmatch::Mode::NO_MATCH_SLASH_LITERAL,
-            )
-        })
-}
-
-fn get_pointer_full_reference_pointer_oid(
-    repo: &Repository,
-    oid: impl Into<ObjectId>,
-) -> Result<String> {
-    let contents = &repo.find_blob(oid)?.data;
-    let pointer: Pointer = serde_json::from_slice(contents.as_slice())?;
-    let hash = pointer.hash();
-    let reference = create_gfs_ref(hash);
-    Ok(reference)
-}
-
 fn get_git_attributes_patterns(entry_ref: EntryRef<'_, '_>) -> Result<HashSet<Pattern>> {
-    let patterns = HashSet::new();
-
     let data = &entry_ref.object()?.data;
 
-    // todo: find patterns, including attrs.
-    let _lines = parse_attributes_from_bytes(data.as_slice());
+    let lines = gix::attrs::parse(data.as_slice());
 
-    todo!("Bro gotta parse those attributes so we can get patterns so we know what files to get pointers for");
+    let patterns_attributes = get_pattern_attributes(lines)?;
+
+    let patterns = get_patterns_from_patterns_attributes(patterns_attributes)?;
 
     Ok(patterns)
+}
+
+fn get_patterns_from_patterns_attributes(
+    patterns_attributes: HashMap<Pattern, (bool, bool)>,
+) -> Result<HashSet<Pattern>> {
+    // todo: warn when is_filter_gfs is true but the rest are not.
+    let patterns: HashSet<Pattern> = patterns_attributes
+        .into_iter()
+        .filter(|(_, (is_filter_gfs, negative_text))| *is_filter_gfs && *negative_text)
+        .map(|(pattern, _)| pattern)
+        .collect();
+
+    Ok(patterns)
+}
+
+fn get_pattern_attributes(lines: Lines) -> Result<HashMap<Pattern, (bool, bool)>> {
+    // "<pattern> filter=gfs -text"
+    let mut patterns_attributes = HashMap::<Pattern, (bool, bool)>::new();
+
+    for line in lines {
+        match line? {
+            // todo: handle macros
+            (Kind::Macro(_), ..) => {}
+            (Kind::Pattern(pattern), assignments, ..) => {
+                let (is_filter_gfs, negative_text) =
+                    patterns_attributes.entry(pattern).or_default();
+
+                if *is_filter_gfs && *negative_text {
+                    continue;
+                }
+
+                for assignment in assignments {
+                    let assignment = assignment?;
+
+                    if !*is_filter_gfs {
+                        *is_filter_gfs = has_gfs_attributes_filter(assignment);
+                    }
+
+                    if !*negative_text {
+                        *negative_text = is_assignment_negative_text(assignment);
+                    }
+                }
+            }
+        };
+    }
+
+    Ok(patterns_attributes)
+}
+
+fn is_assignment_negative_text(assignment: AssignmentRef<'_>) -> bool {
+    assignment.name.as_str() == "-text" && assignment.state.as_bstr().is_none()
+}
+
+fn has_gfs_attributes_filter(assignment: AssignmentRef<'_>) -> bool {
+    let is_filter = assignment.name.as_str() == "filter";
+
+    let is_gfs = assignment.state.as_bstr().map(|bstr| bstr == "gfs");
+
+    matches!((is_filter, is_gfs), (true, Some(true)))
 }
 
 fn bstring_from_stdin() -> Result<BString> {
@@ -133,4 +174,25 @@ fn ids_from_bstr(bstr: &BStr) -> Result<(&BStr, &BStr)> {
         .ok_or_else(|| anyhow!("Expected to find a string with 3 spaces in between"))?;
 
     Ok((from, to))
+}
+
+fn is_entry_blob_matching_pattern(entry: &Entry, patterns: &HashSet<Pattern>) -> bool {
+    entry.mode.kind() == EntryKind::Blob
+        && patterns.iter().any(|pattern| {
+            pattern.matches(
+                entry.filepath.as_ref(),
+                wildmatch::Mode::NO_MATCH_SLASH_LITERAL,
+            )
+        })
+}
+
+fn get_pointer_full_reference_pointer_oid(
+    repo: &Repository,
+    oid: impl Into<ObjectId>,
+) -> Result<String> {
+    let contents = &repo.find_blob(oid)?.data;
+    let pointer: Pointer = serde_json::from_slice(contents.as_slice())?;
+    let hash = pointer.hash();
+    let reference = create_gfs_ref(hash);
+    Ok(reference)
 }
