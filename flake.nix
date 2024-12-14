@@ -53,8 +53,9 @@
           cargo-watch
           cargo-tarpaulin
           clang
-          # codebase'
+          codebase'
           git
+          git-subrepo
           llvmPackages.bintools
           openssl
           openssl.dev
