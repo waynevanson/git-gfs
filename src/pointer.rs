@@ -1,6 +1,8 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
+/// Contains a hash that points to the reference hash.
+///
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 #[serde(tag = "version", content = "pointer")]
 pub enum Pointer {

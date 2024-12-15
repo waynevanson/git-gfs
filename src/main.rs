@@ -8,14 +8,21 @@ use std::path::PathBuf;
 
 #[derive(Parser)]
 enum Command {
+    /// The integration command used when checking in a file using git.
+    ///
+    /// Transforms a `filepath` into parts of `size`,
+    /// stored as blobs within a tree within a reference under
+    /// `refs/gfs/{tree_id}`, the reference in a pointer
+    /// send to `stdout` so git can store it as a file.
     Clean {
         filepath: PathBuf,
         #[arg(default_value_t = ByteSize::mb(50))]
         size: ByteSize,
     },
-    Smudge {
-        filepath: PathBuf,
-    },
+    /// The intergation command used when checking out a file in git.
+    Smudge { filepath: PathBuf },
+    /// The command used in the `pre-push` hook,
+    /// which uploads one reference at a time.
     PrePush,
 }
 

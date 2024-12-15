@@ -1,4 +1,6 @@
 pub trait MapOkThen<Value, Error, Kleisli> {
+    /// When the item of an iterator is a `Result`, apply a function "bind" (kleisli)
+    /// to the item. Fn(value) -> Result<value, error>
     fn map_ok_then<Next>(self, kleisli: Kleisli) -> MapOkThenIter<Self, Kleisli>
     where
         Self: Iterator<Item = Result<Value, Error>> + Sized,
