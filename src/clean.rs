@@ -1,4 +1,4 @@
-use crate::{create_gfs_ref, map_ok_then::MapOkThen, pointer::Pointer, splitter::Splitter};
+use crate::{create_gfs_ref, pointer::Pointer, splitter::Splitter, traits::MapOkThen};
 use anyhow::{anyhow, Result};
 use bytesize::ByteSize;
 use gix::{

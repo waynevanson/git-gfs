@@ -1,16 +1,16 @@
 mod clean;
-mod map_ok_then;
 mod pointer;
 mod pre_push;
 mod smudge;
 mod splitter;
+mod traits;
 
 pub use clean::*;
-pub use map_ok_then::*;
 pub use pointer::*;
 pub use pre_push::*;
 pub use smudge::*;
 pub use splitter::*;
+pub use traits::*;
 
 use std::fmt::Display;
 

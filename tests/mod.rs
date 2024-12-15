@@ -5,13 +5,9 @@
 #![feature(exit_status_error)]
 
 use anyhow::{anyhow, bail, Result};
-use git_file_storage::Pointer;
+use git_file_storage::{Pointer, SealedOutput};
 use gix::bstr::ByteSlice;
 use gix::ThreadSafeRepository;
-use gix::{bstr::BStr, ObjectId};
-use itertools::Itertools;
-use std::fmt::format;
-use std::process::Output;
 use std::{
     fs::{create_dir_all, read_to_string, File},
     io::Write,
@@ -41,21 +37,6 @@ fn create_files(
     }
 
     Ok(())
-}
-
-trait SealedOutput {
-    fn exit_ok_or_stderror(self) -> Result<()>;
-}
-
-impl SealedOutput for Output {
-    fn exit_ok_or_stderror(self) -> Result<()> {
-        if !self.status.success() {
-            let str = self.stderr.to_str()?.to_owned();
-            bail!(str);
-        }
-
-        Ok(())
-    }
 }
 
 fn git_commit_add_all_files(tmp: impl AsRef<Path>) -> Result<()> {
