@@ -49,4 +49,15 @@ mod test {
         let expected = Pointer::V1 { hash: input };
         assert_eq!(pointer, expected)
     }
+
+    #[test]
+    fn to_hash() {
+        let input = "38ihdsnf98dsnf".to_string();
+        let pointer = Pointer::V1 {
+            hash: input.to_owned(),
+        };
+        let hash = pointer.hash();
+        let expected = input;
+        assert_eq!(hash, expected)
+    }
 }
