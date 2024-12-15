@@ -37,3 +37,16 @@ impl Pointer {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::Pointer;
+
+    #[test]
+    fn from_hash() {
+        let input = "38ihdsnf98dsnf".to_string();
+        let pointer = Pointer::from_hash(&input);
+        let expected = Pointer::V1 { hash: input };
+        assert_eq!(pointer, expected)
+    }
+}
