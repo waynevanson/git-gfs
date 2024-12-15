@@ -1,4 +1,3 @@
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 /// Contains a hash that points to the reference hash.
@@ -9,16 +8,27 @@ pub enum Pointer {
     V1 { hash: String },
 }
 
-impl From<String> for Pointer {
-    fn from(value: String) -> Self {
-        Self::V1 { hash: value }
+impl TryFrom<&str> for Pointer {
+    type Error = serde_json::Error;
+
+    fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
+        serde_json::from_str(value)
+    }
+}
+
+impl TryFrom<&Pointer> for String {
+    type Error = serde_json::Error;
+
+    fn try_from(value: &Pointer) -> std::result::Result<Self, Self::Error> {
+        serde_json::to_string_pretty(value)
     }
 }
 
 impl Pointer {
-    pub fn try_to_string(&self) -> Result<String> {
-        let contents = serde_json::to_string_pretty(self)?;
-        Ok(contents)
+    pub fn from_hash(hash: impl AsRef<str>) -> Self {
+        Self::V1 {
+            hash: hash.as_ref().to_owned(),
+        }
     }
 
     pub fn hash(&self) -> &str {

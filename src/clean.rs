@@ -23,14 +23,14 @@ pub fn clean(repo: &Repository, filepath: PathBuf, size: ByteSize) -> Result<()>
 
     let reference_id = create_reference_id(repo, &parts_file_dir)?;
 
-    let pointer = Pointer::from(reference_id.to_string());
+    let pointer = Pointer::from_hash(reference_id.to_string());
     write_pointer(&pointer)?;
 
     Ok(())
 }
 
 fn write_pointer(pointer: &Pointer) -> Result<()> {
-    let contents = pointer.try_to_string()?;
+    let contents: String = pointer.try_into()?;
 
     // write to file
     stdout().write_all(contents.as_bytes())?;
