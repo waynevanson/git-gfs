@@ -1,69 +1,12 @@
-// States to control: file structure, git changes over time.
-// I kind of want full control in code. Maybe including git times and commits etc.
-// A file list of directories, maybe some
+mod common;
 
-#![feature(exit_status_error)]
-
-use anyhow::{anyhow, bail, Result};
-use git_file_storage::{Pointer, SealedOutput};
+use anyhow::{anyhow, Result};
+use common::{create_files, git_commit_add_all_files, git_init};
+use git_file_storage::Pointer;
 use gix::bstr::ByteSlice;
 use gix::ThreadSafeRepository;
-use std::{
-    fs::{create_dir_all, read_to_string, File},
-    io::Write,
-    path::Path,
-    process::Command,
-};
+use std::fs::read_to_string;
 use tempdir::TempDir;
-
-fn create_files(
-    tmp: impl AsRef<Path>,
-    files: impl IntoIterator<Item = (impl AsRef<str>, impl AsRef<str>)>,
-) -> Result<()> {
-    for (path, contents) in files {
-        if path.as_ref().is_empty() {
-            bail!("Expected path to be non-empty")
-        };
-
-        let full_path = tmp.as_ref().join(Path::new(path.as_ref()));
-
-        let dir = full_path
-            .parent()
-            .ok_or_else(|| anyhow!("Expected path to have parent"))?;
-
-        create_dir_all(dir)?;
-
-        File::create(&full_path)?.write_all(contents.as_ref().as_bytes())?;
-    }
-
-    Ok(())
-}
-
-fn git_commit_add_all_files(tmp: impl AsRef<Path>) -> Result<()> {
-    Command::new("git")
-        .current_dir(&tmp)
-        .args(["add", "."])
-        .output()?
-        .exit_ok_or_stderror()?;
-
-    Command::new("git")
-        .current_dir(&tmp)
-        .args(["commit", "--allow-empty-message", "-m", ""])
-        .output()?
-        .exit_ok_or_stderror()?;
-
-    Ok(())
-}
-
-fn git_init(tmp: impl AsRef<Path>) -> Result<()> {
-    Command::new("git")
-        .current_dir(tmp)
-        .args(["init"])
-        .output()?
-        .exit_ok_or_stderror()?;
-
-    Ok(())
-}
 
 #[test]
 fn should_clean_a_file() -> Result<()> {
