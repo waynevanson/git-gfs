@@ -67,6 +67,6 @@ git push
 # Once complete, it will upload the pointers to the remote.
 ```
 
-### Checkout out files
+### Checking out files
 
 This isn't tested! Likely doesn't work.
