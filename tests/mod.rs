@@ -95,7 +95,7 @@ fn should_clean_a_file() -> Result<()> {
         (".gitattributes", "*.txt filter=gfs -text"),
         (
             ".git/config",
-            "[filter \"gfs\"]\nclean=git-gfs -vvvvvvv clean %f\nrequired=true",
+            "[filter \"gfs\"]\nclean=git-gfs clean %f\nrequired=true",
         ),
     ];
     create_files(&tmp, files)?;
