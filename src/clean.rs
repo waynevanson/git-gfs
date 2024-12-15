@@ -21,16 +21,12 @@ pub fn clean(repo: &Repository, filepath: PathBuf, size: ByteSize) -> Result<()>
     let parts_file_dir = repo.path().join("parts").join(&filepath);
     split(filepath, &parts_file_dir, size)?;
 
-    let pointer = create_pointer(repo, &parts_file_dir)?;
+    let reference_id = create_reference_id(repo, &parts_file_dir)?;
+
+    let pointer = Pointer::from(reference_id.to_string());
     write_pointer(&pointer)?;
 
     Ok(())
-}
-
-fn create_pointer(repo: &Repository, parts_file_dir: impl AsRef<Path>) -> Result<Pointer> {
-    let reference_id = create_reference_id(repo, &parts_file_dir)?;
-    let pointer = Pointer::from(reference_id.to_string());
-    Ok(pointer)
 }
 
 fn write_pointer(pointer: &Pointer) -> Result<()> {
