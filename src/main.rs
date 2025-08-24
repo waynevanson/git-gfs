@@ -1,10 +1,10 @@
 use anyhow::Result;
-use bytesize::ByteSize;
 use clap::Parser;
 use clap_verbosity_flag::{InfoLevel, Verbosity};
-use git_file_storage::{clean, pre_push, smudge};
+use git_file_storage::{clean, pre_push, smudge, CleanOptions, Config};
 use gix::ThreadSafeRepository;
-use std::path::PathBuf;
+use serde_jsonc::from_reader;
+use std::{fs::File, path::PathBuf};
 
 #[derive(Parser)]
 enum Command {
@@ -14,11 +14,7 @@ enum Command {
     /// stored as blobs within a tree within a reference under
     /// `refs/gfs/{tree_id}`, the reference in a pointer
     /// send to `stdout` so git can store it as a file.
-    Clean {
-        filepath: PathBuf,
-        #[arg(default_value_t = ByteSize::mb(50))]
-        size: ByteSize,
-    },
+    Clean { filepath: PathBuf },
     /// The intergation command used when checking out a file in git.
     Smudge { filepath: PathBuf },
     /// The command used in the `pre-push` hook,
@@ -44,9 +40,13 @@ fn main() -> Result<()> {
 
     let mut repo = ThreadSafeRepository::open(".")?.to_thread_local();
 
+    // todo: existence
+    let config: Config = from_reader(File::open(".gfs/config.jsonc")?)?;
+
     match args.command {
-        Command::Clean { filepath, size } => {
-            clean(&repo, filepath, size)?;
+        Command::Clean { filepath } => {
+            let options = CleanOptions::try_from(config.clean)?;
+            clean(&repo, filepath, options)?;
         }
         Command::Smudge { filepath } => {
             smudge(&repo, filepath)?;

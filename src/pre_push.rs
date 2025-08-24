@@ -15,9 +15,7 @@ use gix::{
 };
 use itertools::Itertools;
 use std::{
-    collections::HashMap,
-    io::{stdin, Read},
-    process::Command,
+    collections::HashMap, io::{stdin, Read}, ops::Not, process::Command
 };
 
 // get all the commits within the range (from stdin)
@@ -124,7 +122,7 @@ fn get_pattern_attributes(lines: Lines) -> Result<HashMap<Pattern, (bool, bool)>
                 for assignment in assignments {
                     let assignment = assignment?;
 
-                    if !*is_filter_gfs {
+                    if is_filter_gfs.not() {
                         *is_filter_gfs = has_gfs_attributes_filter(assignment);
                     }
 

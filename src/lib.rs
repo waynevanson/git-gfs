@@ -1,15 +1,15 @@
 mod clean;
+mod config;
 mod pointer;
 mod pre_push;
 mod smudge;
-mod splitter;
 mod traits;
 
 pub use clean::*;
+pub use config::*;
 pub use pointer::*;
 pub use pre_push::*;
 pub use smudge::*;
-pub use splitter::*;
 pub use traits::*;
 
 use std::fmt::Display;
@@ -30,3 +30,6 @@ mod test {
         assert_eq!(id, "refs/gfs/chair-bro");
     }
 }
+
+// Pointer which is the blob in the git part of the database.
+// /refs/gfs/{objects/<id>,}

@@ -2,12 +2,31 @@
 
 Seamlessly manage large files without the (probable) costs of `git lfs`.
 
+Using file patterns marked in `.gitattributes`, efficiently store the contents in chunks as git objects inside of `.git` during checkout/clean phases and pushes them to the git repository.
+
+Creating chunks and pushing chunks in smaller batches is to bypass the limits set by git providers such as GitHub.
+
 ## Development status
 
 Currently a work in progress.
-The current target state is to upload all large files as git objects in a single repository.
+The current target state is to upload all large files in chunks as git objects in a single repository.
 
 This target may be extended to bypass limits by git providers.
+
+### Features
+
+- [ ] `clean` (checkout: staged -> working)
+- [ ] `smudge` (staged: working -> staged)
+- [ ] `pre-push"`
+
+## How to think
+
+Checked in
+
+```
+.
+|- .gfs/blobs/[blob]
+```
 
 ## Installation
 
