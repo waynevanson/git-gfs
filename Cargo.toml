@@ -25,6 +25,7 @@ fastcdc = "3.2.1"
 flate2 = { version = "1.1.2", features = ["zlib-rs"], default-features = false }
 sha1 = "0.10.6"
 serde_jsonc = "1.0.108"
+rayon = "1.11.0"
 
 [lints.clippy]
 pedantic = "allow"

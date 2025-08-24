@@ -2,8 +2,10 @@
   inputs = {
     nixpkgs.url = "nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+
     naersk.url = "github:nix-community/naersk";
     naersk.inputs.nixpkgs.follows = "nixpkgs";
+
     fenix.url = "github:nix-community/fenix";
     fenix.inputs.nixpkgs.follows = "nixpkgs";
   };
@@ -95,8 +97,6 @@
           export PATH=$PATH:''${RUSTUP_HOME:-~/.rustup}/toolchains/$RUSTC_VERSION-x86_64-unknown-linux-gnu/bin/
         '';
         common = environment // {inherit nativeBuildInputs buildInputs shellHook;};
-
-
       in {
         packages.git-gfs = git-gfs;
         devShells.default = pkgs.mkShell common;

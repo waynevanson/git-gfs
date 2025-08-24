@@ -1,13 +1,11 @@
 mod clean;
 mod config;
-mod pointer;
 mod pre_push;
 mod smudge;
 mod traits;
 
 pub use clean::*;
 pub use config::*;
-pub use pointer::*;
 pub use pre_push::*;
 pub use smudge::*;
 pub use traits::*;

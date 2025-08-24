@@ -14,9 +14,9 @@ enum Command {
     /// stored as blobs within a tree within a reference under
     /// `refs/gfs/{tree_id}`, the reference in a pointer
     /// send to `stdout` so git can store it as a file.
-    Clean { filepath: PathBuf },
+    Clean,
     /// The intergation command used when checking out a file in git.
-    Smudge { filepath: PathBuf },
+    Smudge,
     /// The command used in the `pre-push` hook,
     /// which uploads one reference at a time.
     PrePush,
@@ -44,12 +44,12 @@ fn main() -> Result<()> {
     let config: Config = from_reader(File::open(".gfs/config.jsonc")?)?;
 
     match args.command {
-        Command::Clean { filepath } => {
+        Command::Clean => {
             let options = CleanOptions::try_from(config.clean)?;
-            clean(&repo, filepath, options)?;
+            clean(&repo, options)?;
         }
-        Command::Smudge { filepath } => {
-            smudge(&repo, filepath)?;
+        Command::Smudge => {
+            smudge()?;
         }
         Command::PrePush => {
             pre_push(&mut repo)?;

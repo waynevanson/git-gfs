@@ -6,9 +6,9 @@ use itertools::Itertools;
 use sha1::{Digest, Sha1};
 use std::{
     collections::HashMap,
-    fs::{write, File},
-    io::{stdout, Write},
-    path::{Path, PathBuf},
+    fs::write,
+    io::{stdin, stdout, Write},
+    path::PathBuf,
     process::Command,
     str::FromStr,
 };
@@ -31,31 +31,26 @@ impl TryFrom<CleanConfig> for CleanOptions {
     }
 }
 
-pub fn clean(_repo: &Repository, filepath: PathBuf, options: CleanOptions) -> Result<()> {
-    let (file_names_ordered, file_name_to_content) = split_into_chunks(&filepath, options)?;
+pub fn clean(_repo: &Repository, options: CleanOptions) -> Result<()> {
+    let (file_names_ordered, file_name_to_content) = split_into_chunks(options)?;
 
     // write to working dir
     let base = PathBuf::from_str(".gfs/contents")?;
 
-    let mut paths = Vec::<PathBuf>::with_capacity(file_name_to_content.len());
+    let mut paths = Vec::<String>::with_capacity(file_name_to_content.len());
 
     // todo: par_iter
     for (file_name, contents) in file_name_to_content {
         let path = base.join(file_name);
         write(&path, contents)?;
 
-        paths.push(path);
+        paths.push(path.display().to_string());
     }
 
+    let args = ["add".to_string()].into_iter().chain(paths);
+
     // git add
-    Command::new("git")
-        .args(
-            ["add"]
-                .into_iter()
-                .map(|a| a.to_string())
-                .chain(paths.into_iter().map(|a| a.display().to_string())),
-        )
-        .output()?;
+    Command::new("git").args(args).output()?;
 
     // write to stdout for git clean
     let pointer_file = file_names_ordered.iter().join("\n");
@@ -64,11 +59,8 @@ pub fn clean(_repo: &Repository, filepath: PathBuf, options: CleanOptions) -> Re
     Ok(())
 }
 
-fn split_into_chunks(
-    source_file: impl AsRef<Path>,
-    options: CleanOptions,
-) -> Result<(Vec<String>, HashMap<String, Vec<u8>>)> {
-    let source = File::open(&source_file)?;
+fn split_into_chunks(options: CleanOptions) -> Result<(Vec<String>, HashMap<String, Vec<u8>>)> {
+    let source = stdin();
 
     let iter = StreamCDC::new(source, options.min_size, options.avg_size, options.max_size);
 

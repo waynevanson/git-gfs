@@ -1,4 +1,4 @@
-use crate::{create_gfs_ref, Pointer};
+use crate::create_gfs_ref;
 use anyhow::{anyhow, Result};
 use gix::{
     attrs::{
@@ -15,7 +15,10 @@ use gix::{
 };
 use itertools::Itertools;
 use std::{
-    collections::HashMap, io::{stdin, Read}, ops::Not, process::Command
+    collections::HashMap,
+    io::{stdin, Read},
+    ops::Not,
+    process::Command,
 };
 
 // get all the commits within the range (from stdin)
