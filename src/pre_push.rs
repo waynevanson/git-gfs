@@ -13,7 +13,7 @@ use std::{ffi::OsStr, io::stdin, process::Command, str::FromStr};
 const LIMIT: ByteSize = ByteSize::mb(500);
 
 // get list of commits we need to send.
-pub fn pre_push(repo: &mut Repository) -> Result<()> {
+pub fn pre_push(repo: &mut Repository, limit: ByteSize) -> Result<()> {
     for line in stdin().lines() {
         let line = line?;
 
@@ -28,7 +28,7 @@ pub fn pre_push(repo: &mut Repository) -> Result<()> {
 
         let lines = commits.stdout.lines();
 
-        push_packs(repo, lines)?;
+        push_packs(repo, lines, limit)?;
     }
 
     Ok(())
@@ -53,6 +53,7 @@ fn push_as_pack(start: Option<&[u8]>, end: Option<&[u8]>) -> Result<()> {
 fn push_packs<'repo, 'a>(
     repo: &Repository,
     mut lines: impl Iterator<Item = &'a [u8]>,
+    limit: ByteSize,
 ) -> Result<()> {
     let mut start = None;
     let mut end = None;
@@ -67,7 +68,7 @@ fn push_packs<'repo, 'a>(
 
         let peeked_total_size = total_size + size;
 
-        if peeked_total_size < LIMIT.as_u64() {
+        if peeked_total_size < limit.as_u64() {
             // go next
             total_size = peeked_total_size;
 

@@ -32,7 +32,7 @@ impl Default for CleanConfig {
 
 #[derive(Deserialize, Serialize, Default)]
 pub struct PrePushConfig {
-    limit: Limit,
+    pub limit: Limit,
 }
 
 #[derive(Deserialize, Serialize)]

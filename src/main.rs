@@ -3,7 +3,7 @@
 use anyhow::Result;
 use clap::Parser;
 use clap_verbosity_flag::{InfoLevel, Verbosity};
-use git_file_storage::{clean, pre_push, smudge, CleanOptions, Config};
+use git_file_storage::{clean, pre_push, smudge, CleanOptions, Config, Limit};
 use gix::ThreadSafeRepository;
 use serde_jsonc::from_reader;
 use std::fs::File;
@@ -54,7 +54,11 @@ fn main() -> Result<()> {
             smudge()?;
         }
         Command::PrePush => {
-            pre_push(&mut repo)?;
+            let limit = match config.pre_push.limit {
+                Limit::Default(bytesize) => bytesize,
+            };
+
+            pre_push(&mut repo, limit)?;
         }
     };
 
