@@ -9,7 +9,8 @@ pub struct Config {
     pub directory: Option<PathBuf>,
     #[serde(default)]
     pub clean: CleanConfig,
-    pub smudge: SmudgeConfig,
+    #[serde(default)]
+    pub pre_push: PrePushConfig,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -30,4 +31,17 @@ impl Default for CleanConfig {
 }
 
 #[derive(Deserialize, Serialize, Default)]
-pub struct SmudgeConfig {}
+pub struct PrePushConfig {
+    limit: Limit,
+}
+
+#[derive(Deserialize, Serialize)]
+pub enum Limit {
+    Default(ByteSize),
+}
+
+impl Default for Limit {
+    fn default() -> Self {
+        Self::Default(ByteSize::mb(500))
+    }
+}
