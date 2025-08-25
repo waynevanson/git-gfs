@@ -1,10 +1,12 @@
+#![feature(try_trait_v2)]
+
 use anyhow::Result;
 use clap::Parser;
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 use git_file_storage::{clean, pre_push, smudge, CleanOptions, Config};
 use gix::ThreadSafeRepository;
 use serde_jsonc::from_reader;
-use std::{fs::File, path::PathBuf};
+use std::fs::File;
 
 #[derive(Parser)]
 enum Command {

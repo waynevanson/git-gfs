@@ -503,6 +503,7 @@ dependencies = [
  "gix",
  "itertools",
  "log",
+ "parval",
  "prng_split",
  "rayon",
  "scopeguard",
@@ -1802,6 +1803,12 @@ dependencies = [
  "smallvec",
  "windows-targets",
 ]
+
+[[package]]
+name = "parval"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8dd29b3f015ec891b541eedcdb787469504e414598a3a28a8df9d8bc6b0a1c9e"
 
 [[package]]
 name = "percent-encoding"
