@@ -1,12 +1,11 @@
-use crate::CleanConfig;
+use crate::config::CleanConfig;
+use anyhow::anyhow;
 use anyhow::{Error, Result};
 use fastcdc::v2020::StreamCDC;
-use gix::Repository;
-use itertools::Itertools;
 use sha1::{Digest, Sha1};
+use std::path::Path;
 use std::{
     collections::HashMap,
-    fs::write,
     io::{stdin, stdout, Write},
     path::PathBuf,
     process::Command,
@@ -31,34 +30,66 @@ impl TryFrom<CleanConfig> for CleanOptions {
     }
 }
 
-pub fn clean(_repo: &Repository, options: CleanOptions) -> Result<()> {
+fn git_ensure_blob(contents: &[u8]) -> Result<Vec<u8>> {
+    let child = Command::new("git")
+        .args(["hash-object", "type", "-w", "--no-filters", "--stdin"])
+        .spawn()?;
+
+    child
+        .stdin
+        .as_ref()
+        .ok_or_else(|| anyhow!("Expected stdin to exist"))?
+        .write_all(&contents)?;
+
+    let git_sha = child.wait_with_output()?.stdout;
+
+    Ok(git_sha)
+}
+
+fn git_update_index_skip_worktree(
+    directory: &Path,
+    content_sha: &str,
+    git_sha: &str,
+) -> Result<()> {
+    let path = directory.join(content_sha);
+    let arg = format!("100644,{},{}", git_sha, path.display());
+
+    Command::new("git")
+        .args(["update-index", "--add", "--cache-info", &arg])
+        .output()?;
+
+    // --skip-worktree only works with existing files in index
+    // From here, we are doing some very funky stuff.
+    Command::new("git")
+        .args(["update-index", "--skip-worktree", content_sha])
+        .output()?;
+
+    Ok(())
+}
+
+pub fn clean(options: CleanOptions) -> Result<()> {
     let (file_names_ordered, file_name_to_content) = split_into_chunks(options)?;
 
-    // write to working dir
     let base = PathBuf::from_str(".gfs/contents")?;
 
-    let mut paths = Vec::<String>::with_capacity(file_name_to_content.len());
+    // add chunks to git index only.
+    for (content_sha, contents) in &file_name_to_content {
+        // remember, this sha is `blob <contents>` as git intended.
+        let git_sha = git_ensure_blob(contents)?;
+        let git_sha: String = git_sha.try_into()?;
 
-    // todo: par_iter
-    for (file_name, contents) in file_name_to_content {
-        let path = base.join(file_name);
-        write(&path, contents)?;
-
-        paths.push(path.display().to_string());
+        git_update_index_skip_worktree(&base, content_sha, &git_sha)?;
     }
 
-    let args = ["add".to_string()].into_iter().chain(paths);
-
-    // git add
-    Command::new("git").args(args).output()?;
-
     // write to stdout for git clean
-    let pointer_file = file_names_ordered.iter().join("\n");
+    let pointer_file = file_names_ordered.join("\n");
+
     stdout().write_all(pointer_file.as_bytes())?;
 
     Ok(())
 }
 
+//
 fn split_into_chunks(options: CleanOptions) -> Result<(Vec<String>, HashMap<String, Vec<u8>>)> {
     let source = stdin();
 
@@ -70,6 +101,7 @@ fn split_into_chunks(options: CleanOptions) -> Result<(Vec<String>, HashMap<Stri
     for item in iter {
         let chunk = item?;
 
+        // create a unique name - SHA1 seemed acceptable.
         let sha: String = Sha1::digest(&chunk.data).to_vec().try_into()?;
 
         file_names_ordered.push(sha.clone());

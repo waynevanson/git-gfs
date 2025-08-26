@@ -1,3 +1,0 @@
-[filter "gfs"]
-clean = "git-gfs clean"
-smudge= "git-gfs smudge"

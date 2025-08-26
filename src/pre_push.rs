@@ -1,19 +1,10 @@
 use anyhow::{anyhow, Result};
 use bytesize::ByteSize;
-use gix::{
-    bstr::ByteSlice,
-    objs::{FindExt, WriteTo},
-    ObjectId, Repository,
-};
 use itertools::Itertools;
-use std::{ffi::OsStr, io::stdin, process::Command, str::FromStr};
-
-// this should come from config
-// unique by remote url.
-const LIMIT: ByteSize = ByteSize::mb(500);
+use std::{ffi::OsStr, io::stdin, process::Command};
 
 // get list of commits we need to send.
-pub fn pre_push(repo: &mut Repository, limit: ByteSize) -> Result<()> {
+pub fn pre_push(limit: ByteSize) -> Result<()> {
     for line in stdin().lines() {
         let line = line?;
 
@@ -28,7 +19,7 @@ pub fn pre_push(repo: &mut Repository, limit: ByteSize) -> Result<()> {
 
         let lines = commits.stdout.lines();
 
-        push_packs(repo, lines, limit)?;
+        push_packs(&repo, lines, limit)?;
     }
 
     Ok(())
@@ -49,7 +40,6 @@ fn push_as_pack(start: Option<&[u8]>, end: Option<&[u8]>) -> Result<()> {
 }
 
 /// Push packs in sections that are below the allowed threshold of a provider.
-/// We assume this to be around 100MB safety.
 fn push_packs<'repo, 'a>(
     repo: &Repository,
     mut lines: impl Iterator<Item = &'a [u8]>,

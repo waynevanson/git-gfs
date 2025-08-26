@@ -1,27 +1,51 @@
-#![feature(try_trait_v2)]
+mod clean;
+mod config;
+mod pre_push;
+mod smudge;
 
 use anyhow::Result;
 use clap::Parser;
 use clap_verbosity_flag::{InfoLevel, Verbosity};
-use git_file_storage::{clean, pre_push, smudge, CleanOptions, Config, Limit};
-use gix::ThreadSafeRepository;
 use serde_jsonc::from_reader;
-use std::fs::File;
+use std::{fs::File, io::ErrorKind};
+
+use crate::{
+    clean::{clean, CleanOptions},
+    config::{Config, Limit},
+    pre_push::pre_push,
+    smudge::smudge,
+};
 
 #[derive(Parser)]
 enum Command {
-    /// The integration command used when checking in a file using git.
+    /// A git attribute filter to check in large files.
     ///
-    /// Transforms a `filepath` into parts of `size`,
-    /// stored as blobs within a tree within a reference under
-    /// `refs/gfs/{tree_id}`, the reference in a pointer
-    /// send to `stdout` so git can store it as a file.
+    /// This does the following:
+    /// 1. Replaces the file with a pointer; a list of sha1 hashes.
+    /// 2. Splits the file contents (from stdin) to distinct blobs, stored as sha1 hashes in `.gfs/contents/<hash>`.
+    ///
+    /// For the inverse, please use `git-gfs smudge`.
     Clean,
-    /// The intergation command used when checking out a file in git.
+    /// A git attribute filter to check out large files.
+    ///
+    /// This does the following:
+    /// 1. Reads the pointer (from stdin); a list of sha1 hashes.
+    /// 2. Reads and concatenates all the blobs from `.gfs/contents/<hash>`.
+    /// 3. Replaces the pointer with the concatenation of blobs.
+    ///
+    /// For the inverse, please use `git-gfs clean`.
     Smudge,
-    /// The command used in the `pre-push` hook,
-    /// which uploads one reference at a time.
-    PrePush,
+    /// Batches packs to a size limit, as defined in `.gfs/config.jsonc`.
+    ///
+    /// Git providers usually set a limit on how big a pack can be,
+    /// and git cannot split these packs into smaller bits.
+    ///
+    /// We generate the biggest allowable pack, push the pack and continue until all commits are sent to all remotes.
+    // todo: check to see if we can write directly to the index
+    PrePush {
+        remote_name: String,
+        remote_location: String,
+    },
 }
 
 #[derive(Parser)]
@@ -40,25 +64,26 @@ fn main() -> Result<()> {
         .filter_level(args.verbosity.log_level_filter())
         .try_init()?;
 
-    let mut repo = ThreadSafeRepository::open(".")?.to_thread_local();
-
-    // todo: existence
-    let config: Config = from_reader(File::open(".gfs/config.jsonc")?)?;
+    let config: Config = match File::open(".gfs/config.jsonc") {
+        Ok(file) => Ok(from_reader(file)?),
+        Err(err) if err.kind() == ErrorKind::NotFound => Ok(Config::default()),
+        Err(err) => Err(err),
+    }?;
 
     match args.command {
         Command::Clean => {
             let options = CleanOptions::try_from(config.clean)?;
-            clean(&repo, options)?;
+            clean(options)?;
         }
         Command::Smudge => {
             smudge()?;
         }
-        Command::PrePush => {
+        Command::PrePush { .. } => {
             let limit = match config.pre_push.limit {
                 Limit::Default(bytesize) => bytesize,
             };
 
-            pre_push(&mut repo, limit)?;
+            pre_push(limit)?;
         }
     };
 
