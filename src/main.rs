@@ -3,18 +3,17 @@ mod config;
 mod pre_push;
 mod smudge;
 
-use anyhow::Result;
-use clap::Parser;
-use clap_verbosity_flag::{InfoLevel, Verbosity};
-use serde_jsonc::from_reader;
-use std::{fs::File, io::ErrorKind};
-
 use crate::{
     clean::{clean, CleanOptions},
     config::{Config, Limit},
     pre_push::pre_push,
     smudge::smudge,
 };
+use anyhow::Result;
+use clap::Parser;
+use clap_verbosity_flag::{InfoLevel, Verbosity};
+use serde_jsonc::from_reader;
+use std::{fs::File, io::ErrorKind};
 
 #[derive(Parser)]
 enum Command {
@@ -41,7 +40,6 @@ enum Command {
     /// and git cannot split these packs into smaller bits.
     ///
     /// We generate the biggest allowable pack, push the pack and continue until all commits are sent to all remotes.
-    // todo: check to see if we can write directly to the index
     PrePush {
         remote_name: String,
         remote_location: String,

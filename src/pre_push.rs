@@ -8,10 +8,21 @@ pub fn pre_push(limit: ByteSize) -> Result<()> {
     for line in stdin().lines() {
         let line = line?;
 
+        // delimit spaces
         let (_local_ref, local_sha1, _remote_ref, remote_sha1) = line
             .split(" ")
             .collect_tuple::<(&str, &str, &str, &str)>()
             .ok_or_else(|| anyhow!("Expected to be able to split the line into 4 segments"))?;
+
+        // instead.
+        // Would like to check the remote to see what' smissing.
+        // so firstly check which commits need to be sent, then trees, then blobs.
+        // filter for stuff we need to pack
+        //
+        // then get blob sizes
+        // then create chunks that fit within the limit
+        // and create a pack
+        // and send that pack without negotiation (already done)
 
         let commits = Command::new("git")
             .args(["rev-list", local_sha1, "--not", remote_sha1])
@@ -39,6 +50,7 @@ fn push_as_pack(start: Option<&[u8]>, end: Option<&[u8]>) -> Result<()> {
     Ok(())
 }
 
+// todo: are there more efficient ways to create chunks?
 /// Push packs in sections that are below the allowed threshold of a provider.
 fn push_packs<'repo, 'a>(
     repo: &Repository,
