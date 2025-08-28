@@ -111,7 +111,19 @@ pub fn clean(options: CleanOptions) -> Result<()> {
     git_update_index_skip_worktree_many(&file_name_to_git_sha)?;
 
     // write to stdout for git clean
-    let pointer_file = file_names_ordered.join("\n");
+    let pointer_file = file_names_ordered
+        .iter()
+        .map(|content_sha| {
+            file_name_to_git_sha
+                .get(content_sha)
+                .ok_or_else(|| anyhow!("Expected to find this"))
+        })
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .intersperse(&"\n".to_string())
+        .cloned()
+        .collect::<String>();
+
     stdout().write_all(pointer_file.as_bytes())?;
 
     Ok(())
