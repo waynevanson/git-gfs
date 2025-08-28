@@ -2,11 +2,7 @@ mod clean;
 mod config;
 mod smudge;
 
-use crate::{
-    clean::{clean, CleanOptions},
-    config::Config,
-    smudge::smudge,
-};
+use crate::{clean::clean, config::Config, smudge::smudge};
 use anyhow::Result;
 use clap::Parser;
 use clap_verbosity_flag::{InfoLevel, Verbosity};
@@ -32,7 +28,11 @@ enum Command {
     ///
     /// For the inverse, please use `git-gfs clean`.
     Smudge,
-    // todo: add Check command
+    // todo: add Check command'
+    // check that the filters exist in the git config.
+    // check that the pack limit is small
+    //
+    // test to see if I need prepush to split up a push into multiple.
 }
 
 #[derive(Parser)]
@@ -58,13 +58,8 @@ fn main() -> Result<()> {
     }?;
 
     match args.command {
-        Command::Clean => {
-            let options = CleanOptions::try_from(config.clean)?;
-            clean(options)?;
-        }
-        Command::Smudge => {
-            smudge()?;
-        }
+        Command::Clean => clean(config.try_into()?)?,
+        Command::Smudge => smudge()?,
     }
 
     Ok(())

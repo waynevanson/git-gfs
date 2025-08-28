@@ -1,27 +1,34 @@
 use bytesize::ByteSize;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
-
-#[derive(Deserialize, Serialize, Default)]
-pub struct Config {
-    pub directory: Option<PathBuf>,
-    #[serde(default)]
-    pub clean: CleanConfig,
-}
 
 #[derive(Deserialize, Serialize)]
-pub struct CleanConfig {
+pub struct Config {
+    #[serde(default = "avg_size")]
     pub avg_size: ByteSize,
+    #[serde(default = "min_size")]
     pub min_size: ByteSize,
+    #[serde(default = "max_size")]
     pub max_size: ByteSize,
 }
 
-impl Default for CleanConfig {
+const fn avg_size() -> ByteSize {
+    ByteSize::kb(100)
+}
+
+const fn min_size() -> ByteSize {
+    ByteSize::b(1)
+}
+
+const fn max_size() -> ByteSize {
+    ByteSize::mb(100)
+}
+
+impl Default for Config {
     fn default() -> Self {
         Self {
-            avg_size: ByteSize::kb(100),
-            min_size: ByteSize::b(1),
-            max_size: ByteSize::mb(100),
+            avg_size: avg_size(),
+            min_size: min_size(),
+            max_size: max_size(),
         }
     }
 }

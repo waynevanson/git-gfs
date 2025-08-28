@@ -1,4 +1,4 @@
-use crate::config::CleanConfig;
+use crate::config::Config;
 use anyhow::anyhow;
 use anyhow::{Error, Result};
 use fastcdc::v2020::StreamCDC;
@@ -18,13 +18,13 @@ pub struct CleanOptions {
     pub avg_size: u32,
 }
 
-impl TryFrom<CleanConfig> for CleanOptions {
+impl TryFrom<Config> for CleanOptions {
     type Error = Error;
 
-    fn try_from(config: CleanConfig) -> anyhow::Result<Self> {
+    fn try_from(config: Config) -> anyhow::Result<Self> {
         Ok(Self {
-            min_size: u32::try_from(config.min_size.0)?,
             avg_size: u32::try_from(config.avg_size.0)?,
+            min_size: u32::try_from(config.min_size.0)?,
             max_size: u32::try_from(config.max_size.0)?,
         })
     }
