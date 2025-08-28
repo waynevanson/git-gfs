@@ -1,12 +1,10 @@
 mod clean;
 mod config;
-mod pre_push;
 mod smudge;
 
 use crate::{
     clean::{clean, CleanOptions},
-    config::{Config, Limit},
-    pre_push::pre_push,
+    config::Config,
     smudge::smudge,
 };
 use anyhow::Result;
@@ -34,16 +32,7 @@ enum Command {
     ///
     /// For the inverse, please use `git-gfs clean`.
     Smudge,
-    /// Batches packs to a size limit, as defined in `.gfs/config.jsonc`.
-    ///
-    /// Git providers usually set a limit on how big a pack can be,
-    /// and git cannot split these packs into smaller bits.
-    ///
-    /// We generate the biggest allowable pack, push the pack and continue until all commits are sent to all remotes.
-    PrePush {
-        remote_name: String,
-        remote_location: String,
-    },
+    // todo: add Check command
 }
 
 #[derive(Parser)]
@@ -76,14 +65,7 @@ fn main() -> Result<()> {
         Command::Smudge => {
             smudge()?;
         }
-        Command::PrePush { .. } => {
-            let limit = match config.pre_push.limit {
-                Limit::Default(bytesize) => bytesize,
-            };
-
-            pre_push(limit)?;
-        }
-    };
+    }
 
     Ok(())
 }
