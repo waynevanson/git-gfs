@@ -40,23 +40,17 @@
           rustc = rust';
         };
 
-        codebase' = naersk'.buildPackage {
-          name = "workspace";
-          src = ./.;
-          cargoClippyOptions = _: ["-A clippy::all"];
-        };
-
         git-gfs = naersk'.buildPackage {
           name = "git-gfs";
           version = "0.0.0";
           src = ./.;
+          cargoClippyOptions = _: ["-A clippy::all"];
         };
 
         nativeBuildInputs = with pkgs; [
           cargo-watch
           cargo-tarpaulin
           clang
-          #codebase'
           git
           git-subrepo
           llvmPackages.bintools
@@ -70,7 +64,6 @@
           git
           openssl
           pkg-config
-          #git-gfs
         ];
 
         environment = {
@@ -98,7 +91,9 @@
         '';
         common = environment // {inherit nativeBuildInputs buildInputs shellHook;};
       in {
-        packages.git-gfs = git-gfs;
+        packages = {
+          inherit git-gfs;
+        };
         devShells.default = pkgs.mkShell common;
       }
     );

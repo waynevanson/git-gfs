@@ -93,11 +93,10 @@ fn git_update_index_skip_worktree_many(
     Ok(())
 }
 
-pub fn clean(options: CleanOptions) -> Result<()> {
-    let (file_names_ordered, file_name_to_content) = split_into_chunks(options)?;
-
-    // create all the blobs
-    let file_name_to_git_sha = file_name_to_content
+fn git_ensure_blobs(
+    file_name_to_content: &HashMap<String, Vec<u8>>,
+) -> Result<HashMap<&String, String>> {
+    let value = file_name_to_content
         .iter()
         .map(|(content_sha, contents)| {
             let git_sha = git_ensure_blob(&contents)?;
@@ -105,13 +104,32 @@ pub fn clean(options: CleanOptions) -> Result<()> {
         })
         .collect::<Result<HashMap<_, _>>>()?;
 
+    Ok(value)
+}
+
+pub fn clean(options: CleanOptions) -> Result<()> {
+    let (file_names_ordered, file_name_to_content) = split_into_chunks(options)?;
+
+    // create all the blobs
+    let file_name_to_git_sha = git_ensure_blobs(&file_name_to_content)?;
+
     git_update_index_add_many(&file_name_to_git_sha)?;
 
     // skip the worktree for all files
     git_update_index_skip_worktree_many(&file_name_to_git_sha)?;
 
     // write to stdout for git clean
-    let pointer_file = file_names_ordered
+    let pointer_file = create_pointer_file(file_names_ordered, file_name_to_git_sha)?;
+    stdout().write_all(pointer_file.as_bytes())?;
+
+    Ok(())
+}
+
+fn create_pointer_file(
+    file_names_ordered: Vec<String>,
+    file_name_to_git_sha: HashMap<&String, String>,
+) -> Result<String> {
+    Ok(file_names_ordered
         .iter()
         .map(|content_sha| {
             file_name_to_git_sha
@@ -122,11 +140,7 @@ pub fn clean(options: CleanOptions) -> Result<()> {
         .into_iter()
         .intersperse(&"\n".to_string())
         .cloned()
-        .collect::<String>();
-
-    stdout().write_all(pointer_file.as_bytes())?;
-
-    Ok(())
+        .collect::<String>())
 }
 
 fn split_into_chunks(options: CleanOptions) -> Result<(Vec<String>, HashMap<String, Vec<u8>>)> {
