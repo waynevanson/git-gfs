@@ -20,7 +20,7 @@ const fn min_size() -> ByteSize {
 }
 
 const fn max_size() -> ByteSize {
-    ByteSize::mb(100)
+    ByteSize::mb(1)
 }
 
 impl Default for Config {
