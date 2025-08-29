@@ -16,7 +16,7 @@ const fn avg_size() -> ByteSize {
 }
 
 const fn min_size() -> ByteSize {
-    ByteSize::b(1)
+    ByteSize::b(64)
 }
 
 const fn max_size() -> ByteSize {
