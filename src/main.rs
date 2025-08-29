@@ -1,5 +1,7 @@
 mod clean;
 mod config;
+mod flat_map_ok;
+mod iter_reader_result;
 mod smudge;
 
 use crate::{clean::clean, config::Config, smudge::smudge};
