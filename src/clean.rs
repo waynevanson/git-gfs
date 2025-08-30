@@ -36,6 +36,7 @@ fn git_ensure_blob(contents: &[u8]) -> Result<String> {
     let child = Command::new("git")
         .args(["hash-object", "-w", "--no-filters", "--stdin"])
         .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
         .spawn()?;
 
     // using stdin so we don't have to specify a file to read
@@ -46,6 +47,7 @@ fn git_ensure_blob(contents: &[u8]) -> Result<String> {
         .write_all(&contents)?;
 
     let git_sha: String = child.wait_with_output()?.stdout.try_into()?;
+    trace!("Created GitSha1 '{}'", git_sha);
 
     Ok(git_sha)
 }
