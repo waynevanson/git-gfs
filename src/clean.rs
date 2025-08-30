@@ -9,7 +9,7 @@ use std::io::BufRead;
 use std::process::Stdio;
 use std::{
     collections::HashMap,
-    io::{stdin, stdout, Write},
+    io::{stdin, Write},
     path::PathBuf,
     process::Command,
     str::FromStr,
@@ -115,19 +115,19 @@ fn git_update_index_add_many(entries: &HashMap<&String, String>) -> Result<()> {
     Ok(())
 }
 
-// todo: use the actual
-fn git_update_index_skip_worktree_many(entries: &HashMap<&String, String>) -> Result<()> {
-    let entries = entries
-        .into_iter()
-        .map(|(content_sha, git_sha)| format!("100644 blob {} {} {}", git_sha, content_sha));
+// // todo: use the actual
+// fn git_update_index_skip_worktree_many(entries: &HashMap<&String, String>) -> Result<()> {
+//     let entries = entries
+//         .into_iter()
+//         .map(|(content_sha, git_sha)| format!("100644 blob {} {} {}", git_sha, content_sha));
 
-    Command::new("git")
-        .args(["update-index", "--skip-worktree"])
-        .args(entries)
-        .output()?;
+//     Command::new("git")
+//         .args(["update-index", "--skip-worktree"])
+//         .args(entries)
+//         .output()?;
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 fn git_ensure_blobs(
     file_name_to_content: &HashMap<String, Vec<u8>>,
@@ -172,23 +172,23 @@ pub fn clean(options: CleanOptions) -> Result<()> {
     // Ok(())
 }
 
-fn create_pointer_file(
-    file_names_ordered: Vec<String>,
-    file_name_to_git_sha: HashMap<&String, String>,
-) -> Result<String> {
-    Ok(file_names_ordered
-        .iter()
-        .map(|content_sha| {
-            file_name_to_git_sha
-                .get(content_sha)
-                .ok_or_else(|| anyhow!("Expected to find this"))
-        })
-        .collect::<Result<Vec<_>>>()?
-        .into_iter()
-        .intersperse(&"\n".to_string())
-        .cloned()
-        .collect::<String>())
-}
+// fn create_pointer_file(
+//     file_names_ordered: Vec<String>,
+//     file_name_to_git_sha: HashMap<&String, String>,
+// ) -> Result<String> {
+//     Ok(file_names_ordered
+//         .iter()
+//         .map(|content_sha| {
+//             file_name_to_git_sha
+//                 .get(content_sha)
+//                 .ok_or_else(|| anyhow!("Expected to find this"))
+//         })
+//         .collect::<Result<Vec<_>>>()?
+//         .into_iter()
+//         .intersperse(&"\n".to_string())
+//         .cloned()
+//         .collect::<String>())
+// }
 
 fn split_into_chunks(options: CleanOptions) -> Result<(Vec<String>, HashMap<String, Vec<u8>>)> {
     let source = stdin();
