@@ -89,12 +89,40 @@ fn git_update_index_add_many(
     Ok(())
 }
 
-fn git_update_index_skip_worktree_many(
-    entries: impl IntoIterator<Item = (impl AsRef<str>, impl AsRef<str>)>,
-) -> Result<()> {
-    let entries = entries.into_iter().map(|(content_sha, git_sha)| {
-        format!("100644 {}\t{}", git_sha.as_ref(), content_sha.as_ref())
-    });
+fn git_update_index_skip_worktree_many(entries: &HashMap<&String, String>) -> Result<()> {
+    // %(objectmode) %(objecttype) %(objectname) %(objectsize:padded)%x09%(path)
+    //
+    // Various values from structured fields can be used to interpolate into the resulting output. For each outputting line, the following names can be used:
+
+    //
+    // objectmode
+    //     The mode of the object.
+    // objecttype
+    //     The type of the object (commit, blob or tree).
+    // objectname
+    //     The name of the object.
+    // objectsize[:padded]
+    //     The size of a blob object ("-" if it’s a commit or tree). It also supports a padded format of size with "%(objectsize:padded)".
+    // path
+    //     The pathname of the object.
+
+    // todo: probably get the sizes when creating them?
+    // but batching is probably just so good.
+    // todo: use stdin for this. needs some special bytes to kick off stdin
+    let sizes: Vec<_> = Command::new("git")
+        .args(["cat-file", "--batch-check", "-s"])
+        .args(entries.iter().map(|(_, git_sha)| git_sha))
+        .output()?
+        .stdout
+        .lines()
+        .try_collect()?;
+
+    let entries = entries
+        .into_iter()
+        .zip_eq(sizes)
+        .map(|((content_sha, git_sha), size)| {
+            format!("100644 blob {} {} {}", size, git_sha, content_sha)
+        });
 
     Command::new("git")
         .args(["update-index", "--skip-worktree"])
