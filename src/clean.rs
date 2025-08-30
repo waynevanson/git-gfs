@@ -121,6 +121,7 @@ pub fn clean(options: CleanOptions) -> Result<()> {
 
     // create all the blobs
     let file_name_to_git_sha = git_ensure_blobs(&file_name_to_content)?;
+    trace!("{:?}", file_name_to_git_sha);
     trace!("Created blobs");
 
     git_update_index_add_many(&file_name_to_git_sha)?;
