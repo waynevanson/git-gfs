@@ -85,6 +85,7 @@ fn git_update_index_add_many(entries: &HashMap<&String, String>) -> Result<()> {
         .output()?
         .stdout
         .lines()
+        .filter_ok(|a| a.len() > 0)
         .try_collect()?;
 
     // create all the entries in the index
