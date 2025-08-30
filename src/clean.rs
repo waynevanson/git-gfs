@@ -163,10 +163,10 @@ fn split_into_chunks(options: CleanOptions) -> Result<(Vec<String>, HashMap<Stri
         trace!("Chunk successful at {}", index);
 
         // create a unique name - SHA1 seemed acceptable.
-        let sha = Sha1::digest(&chunk.data).to_vec();
+        let sha = Sha1::digest(&chunk.data);
         trace!("Sha1 generated for chunk {}", index);
 
-        let sha: String = sha.try_into()?;
+        let sha: String = format!("{:x}", sha);
         trace!("Sha1 stringified for chunk {}", index);
 
         files.insert(sha.clone(), chunk.data);
