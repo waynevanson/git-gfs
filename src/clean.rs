@@ -57,39 +57,9 @@ fn git_ensure_blob(contents: &[u8]) -> Result<String> {
     Ok(git_sha)
 }
 
-fn git_update_index_add_many(
-    entries: impl IntoIterator<Item = (impl AsRef<str>, impl AsRef<str>)>,
-) -> Result<()> {
+fn git_update_index_add_many(entries: &HashMap<&String, String>) -> Result<()> {
     let base = PathBuf::from_str(".gfs/contents")?;
 
-    // create all the entries in the index
-    // the reverse will still exist in the worktree for now.
-    let entries = entries
-        .into_iter()
-        .map(|(content_sha, git_sha)| {
-            let path = base.join(content_sha.as_ref());
-            let arg = format!("100644,{},{}", git_sha.as_ref(), path.display());
-            arg
-        })
-        .join("\n");
-
-    let mut child = Command::new("git")
-        .args(["update-index", "--add", "--index-info"])
-        .stdin(Stdio::piped())
-        .spawn()?;
-
-    child
-        .stdin
-        .as_ref()
-        .ok_or_else(|| anyhow!("Expected stdin handle"))?
-        .write_all(entries.as_bytes())?;
-
-    child.wait()?;
-
-    Ok(())
-}
-
-fn git_update_index_skip_worktree_many(entries: &HashMap<&String, String>) -> Result<()> {
     // %(objectmode) %(objecttype) %(objectname) %(objectsize:padded)%x09%(path)
     //
     // Various values from structured fields can be used to interpolate into the resulting output. For each outputting line, the following names can be used:
@@ -117,12 +87,39 @@ fn git_update_index_skip_worktree_many(entries: &HashMap<&String, String>) -> Re
         .lines()
         .try_collect()?;
 
+    // create all the entries in the index
+    // the reverse will still exist in the worktree for now.
     let entries = entries
         .into_iter()
         .zip_eq(sizes)
         .map(|((content_sha, git_sha), size)| {
-            format!("100644 blob {} {} {}", size, git_sha, content_sha)
-        });
+            let path = base.join(content_sha);
+            let arg = format!("100644 blob {} {} {}", size, git_sha, path.display());
+            arg
+        })
+        .join("\n");
+
+    let mut child = Command::new("git")
+        .args(["update-index", "--add", "--index-info"])
+        .stdin(Stdio::piped())
+        .spawn()?;
+
+    child
+        .stdin
+        .as_ref()
+        .ok_or_else(|| anyhow!("Expected stdin handle"))?
+        .write_all(entries.as_bytes())?;
+
+    child.wait()?;
+
+    Ok(())
+}
+
+// todo: use the actual
+fn git_update_index_skip_worktree_many(entries: &HashMap<&String, String>) -> Result<()> {
+    let entries = entries
+        .into_iter()
+        .map(|(content_sha, git_sha)| format!("100644 blob {} {} {}", git_sha, content_sha));
 
     Command::new("git")
         .args(["update-index", "--skip-worktree"])
@@ -159,6 +156,8 @@ pub fn clean(options: CleanOptions) -> Result<()> {
 
     git_update_index_add_many(&file_name_to_git_sha)?;
     trace!("Created index but with worktrees");
+
+    todo!();
 
     // skip the worktree for all files
     git_update_index_skip_worktree_many(&file_name_to_git_sha)?;
