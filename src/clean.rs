@@ -34,7 +34,7 @@ impl TryFrom<Config> for CleanOptions {
 
 fn git_ensure_blob(contents: &[u8]) -> Result<String> {
     let child = Command::new("git")
-        .args(["hash-object", "--type", "-w", "--no-filters", "--stdin"])
+        .args(["hash-object", "-w", "--no-filters", "--stdin"])
         .stdin(Stdio::piped())
         .spawn()?;
 
