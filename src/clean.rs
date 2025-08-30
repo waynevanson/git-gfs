@@ -146,7 +146,7 @@ fn git_ensure_blobs(
 pub fn clean(options: CleanOptions) -> Result<()> {
     trace!("Running command 'clean'");
 
-    let (file_names_ordered, file_name_to_content) = split_into_chunks(options)?;
+    let (_file_names_ordered, file_name_to_content) = split_into_chunks(options)?;
     trace!("Chunks split");
 
     // create all the blobs
@@ -159,17 +159,17 @@ pub fn clean(options: CleanOptions) -> Result<()> {
 
     todo!();
 
-    // skip the worktree for all files
-    git_update_index_skip_worktree_many(&file_name_to_git_sha)?;
-    trace!("Applied --skip-worktree");
+    // // skip the worktree for all files
+    // git_update_index_skip_worktree_many(&file_name_to_git_sha)?;
+    // trace!("Applied --skip-worktree");
 
-    // write to stdout for git clean
-    let pointer_file = create_pointer_file(file_names_ordered, file_name_to_git_sha)?;
-    stdout().write_all(pointer_file.as_bytes())?;
+    // // write to stdout for git clean
+    // let pointer_file = create_pointer_file(file_names_ordered, file_name_to_git_sha)?;
+    // stdout().write_all(pointer_file.as_bytes())?;
 
-    trace!("Pointer file sent");
+    // trace!("Pointer file sent");
 
-    Ok(())
+    // Ok(())
 }
 
 fn create_pointer_file(
