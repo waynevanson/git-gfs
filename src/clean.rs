@@ -3,6 +3,7 @@ use anyhow::anyhow;
 use anyhow::{Error, Result};
 use fastcdc::v2020::StreamCDC;
 use itertools::Itertools;
+use log::trace;
 use sha1::{Digest, Sha1};
 use std::{
     collections::HashMap,
@@ -108,6 +109,8 @@ fn git_ensure_blobs(
 }
 
 pub fn clean(options: CleanOptions) -> Result<()> {
+    trace!("Running command 'clean'");
+
     let (file_names_ordered, file_name_to_content) = split_into_chunks(options)?;
 
     // create all the blobs
@@ -153,11 +156,18 @@ fn split_into_chunks(options: CleanOptions) -> Result<(Vec<String>, HashMap<Stri
     // todo: make &string and borrow from the hashmap
     let mut file_names_ordered = Vec::<String>::new();
 
-    for item in iter {
+    trace!("Iterating CDC streaming");
+
+    for (index, item) in iter.enumerate() {
         let chunk = item?;
+        trace!("Chunk successful at {}", index);
 
         // create a unique name - SHA1 seemed acceptable.
-        let sha: String = Sha1::digest(&chunk.data).to_vec().try_into()?;
+        let sha = Sha1::digest(&chunk.data).to_vec();
+        trace!("Sha1 generated for chunk {}", index);
+
+        let sha: String = sha.try_into()?;
+        trace!("Sha1 stringified for chunk {}", index);
 
         files.insert(sha.clone(), chunk.data);
 

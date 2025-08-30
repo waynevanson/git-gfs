@@ -8,6 +8,7 @@ use crate::{clean::clean, config::Config, smudge::smudge};
 use anyhow::Result;
 use clap::Parser;
 use clap_verbosity_flag::{InfoLevel, Verbosity};
+use log::{info, trace};
 use serde_jsonc::from_reader;
 use std::{fs::File, io::ErrorKind};
 
@@ -47,17 +48,30 @@ struct Args {
 }
 
 fn main() -> Result<()> {
-    let args = Args::parse();
+    let args = Args::try_parse()?;
 
     env_logger::Builder::new()
         .filter_level(args.verbosity.log_level_filter())
         .try_init()?;
 
+    trace!(
+        "Initialized logger with {}",
+        args.verbosity.log_level_filter()
+    );
+
     let config: Config = match File::open(".gfs/config.jsonc") {
-        Ok(file) => Ok(from_reader(file)?),
-        Err(err) if err.kind() == ErrorKind::NotFound => Ok(Config::default()),
+        Ok(file) => {
+            trace!("Config exists");
+            Ok(from_reader(file)?)
+        }
+        Err(err) if err.kind() == ErrorKind::NotFound => {
+            trace!("Config missing, using defaults");
+            Ok(Config::default())
+        }
         Err(err) => Err(err),
     }?;
+
+    trace!("Initialized config file");
 
     match args.command {
         Command::Clean => clean(config.try_into()?)?,
