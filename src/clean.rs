@@ -5,6 +5,7 @@ use fastcdc::v2020::StreamCDC;
 use itertools::Itertools;
 use log::trace;
 use sha1::{Digest, Sha1};
+use std::process::Stdio;
 use std::{
     collections::HashMap,
     io::{stdin, stdout, Write},
@@ -34,6 +35,7 @@ impl TryFrom<Config> for CleanOptions {
 fn git_ensure_blob(contents: &[u8]) -> Result<String> {
     let child = Command::new("git")
         .args(["hash-object", "type", "-w", "--no-filters", "--stdin"])
+        .stdin(Stdio::piped())
         .spawn()?;
 
     // using stdin so we don't have to specify a file to read
@@ -66,6 +68,7 @@ fn git_update_index_add_many(
 
     let mut child = Command::new("git")
         .args(["update-index", "--add", "--index-info"])
+        .stdin(Stdio::piped())
         .spawn()?;
 
     child
@@ -112,18 +115,24 @@ pub fn clean(options: CleanOptions) -> Result<()> {
     trace!("Running command 'clean'");
 
     let (file_names_ordered, file_name_to_content) = split_into_chunks(options)?;
+    trace!("Chunks split");
 
     // create all the blobs
     let file_name_to_git_sha = git_ensure_blobs(&file_name_to_content)?;
+    trace!("Created blobs");
 
     git_update_index_add_many(&file_name_to_git_sha)?;
+    trace!("Created index but with worktrees");
 
     // skip the worktree for all files
     git_update_index_skip_worktree_many(&file_name_to_git_sha)?;
+    trace!("Applied --skip-worktree");
 
     // write to stdout for git clean
     let pointer_file = create_pointer_file(file_names_ordered, file_name_to_git_sha)?;
     stdout().write_all(pointer_file.as_bytes())?;
+
+    trace!("Pointer file sent");
 
     Ok(())
 }
