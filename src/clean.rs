@@ -5,6 +5,7 @@ use fastcdc::v2020::StreamCDC;
 use itertools::Itertools;
 use log::trace;
 use sha1::{Digest, Sha1};
+use std::io::BufRead;
 use std::process::Stdio;
 use std::{
     collections::HashMap,
@@ -47,6 +48,10 @@ fn git_ensure_blob(contents: &[u8]) -> Result<String> {
         .write_all(&contents)?;
 
     let git_sha: String = child.wait_with_output()?.stdout.try_into()?;
+
+    // remove newlines (always at end)
+    let git_sha = git_sha.lines().join("");
+
     trace!("Created GitSha1 '{}'", git_sha);
 
     Ok(git_sha)
