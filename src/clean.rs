@@ -1,19 +1,10 @@
 use crate::config::Config;
 use crate::content_sha::ContentSha;
 use crate::git_object_sized::GitObjectSized;
-use anyhow::anyhow;
 use anyhow::{Error, Result};
 use fastcdc::v2020::StreamCDC;
-use itertools::Itertools;
 use log::trace;
-use std::process::Stdio;
-use std::{
-    collections::HashMap,
-    io::{stdin, Write},
-    path::PathBuf,
-    process::Command,
-    str::FromStr,
-};
+use std::{collections::HashMap, io::stdin, path::PathBuf, process::Command, str::FromStr};
 
 pub struct CleanOptions {
     pub min_size: u32,
@@ -33,37 +24,25 @@ impl TryFrom<Config> for CleanOptions {
     }
 }
 
+// create all the entries in the index
+// the reverse will still exist in the worktree for now.
 fn git_update_index_add_many(entries: &HashMap<&ContentSha, GitObjectSized>) -> Result<()> {
     let base = PathBuf::from_str(".gfs/contents")?;
 
-    // create all the entries in the index
-    // the reverse will still exist in the worktree for now.
-    let entries = entries
-        .into_iter()
-        .map(|(content_sha, git_object)| {
-            let path = base.join(content_sha);
-            let arg = format!(
-                "100644 blob {} {} {}\n",
-                git_object.size(),
-                git_object.object_id(),
-                path.display()
-            );
-            arg
-        })
-        .join("");
+    for (content_sha, git_object) in entries {
+        let path = base.join(content_sha);
 
-    let mut child = Command::new("git")
-        .args(["update-index", "--add", "--index-info"])
-        .stdin(Stdio::piped())
-        .spawn()?;
+        let mode_sha_path = format!(
+            "100644 blob {} {}\n",
+            git_object.object_id(),
+            path.display()
+        );
 
-    child
-        .stdin
-        .as_ref()
-        .ok_or_else(|| anyhow!("Expected stdin handle"))?
-        .write_all(entries.as_bytes())?;
-
-    child.wait()?;
+        Command::new("git")
+            .args(["update-index", "--add", "--cache-info"])
+            .arg(mode_sha_path)
+            .output()?;
+    }
 
     Ok(())
 }
@@ -133,7 +112,6 @@ fn split_into_chunks(
         let sha = ContentSha::from_contents(&chunk.data);
 
         files.insert(sha.clone(), chunk.data);
-
         file_names_ordered.push(sha);
     }
 
