@@ -2,7 +2,7 @@ use itertools::Itertools;
 use serde::Serializer;
 use std::ffi::OsStr;
 use std::fmt::Display;
-use std::io::{BufRead, Error as IOError, Result as IOResult};
+use std::io::{Error as IOError, Result as IOResult};
 use std::process::Stdio;
 use std::{io::Write, process::Command};
 
@@ -38,18 +38,8 @@ impl GitObjectId {
         Ok(Self { sha: inner })
     }
 
-    pub fn size(&self) -> IOResult<u32> {
-        Command::new("git")
-            .args(["cat-file", "-s"])
-            .arg(&self.sha)
-            .output()?
-            .stdout
-            .lines()
-            .collect::<IOResult<String>>()
-            .iter()
-            .join(&"")
-            .parse::<u32>()
-            .map_err(IOError::other)
+    pub fn value(&self) -> &String {
+        &self.sha
     }
 }
 

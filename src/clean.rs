@@ -1,10 +1,15 @@
-use crate::config::Config;
 use crate::content_sha::ContentSha;
-use crate::git_object_sized::GitObjectSized;
-use anyhow::{Error, Result};
+use crate::{config::Config, git_object_id::GitObjectId};
+use anyhow::{anyhow, Error, Result};
 use fastcdc::v2020::StreamCDC;
 use log::trace;
-use std::{collections::HashMap, io::stdin, path::PathBuf, process::Command, str::FromStr};
+use std::{
+    collections::HashMap,
+    io::{stdin, stdout, Write},
+    path::PathBuf,
+    process::Command,
+    str::FromStr,
+};
 
 pub struct CleanOptions {
     pub min_size: u32,
@@ -24,72 +29,90 @@ impl TryFrom<Config> for CleanOptions {
     }
 }
 
-// create all the entries in the index
-// the reverse will still exist in the worktree for now.
-fn git_update_index_add_many(entries: &HashMap<&ContentSha, GitObjectSized>) -> Result<()> {
-    let base = PathBuf::from_str(".gfs/contents")?;
+pub fn clean(options: CleanOptions) -> Result<()> {
+    trace!("Running command 'clean'");
 
-    for (content_sha, git_object) in entries {
-        let path = base.join(content_sha);
+    let (file_names_ordered, file_name_to_content) = split_into_chunks(options)?;
+    trace!("Chunks split");
 
-        let mode_sha_path = format!(
-            "100644 blob {} {}\n",
-            git_object.object_id(),
-            path.display()
-        );
+    // create all the blobs
+    let file_name_to_git_sha = git_ensure_blobs(&file_name_to_content)?;
+    trace!("Created blobs");
 
-        Command::new("git")
-            .args(["update-index", "--add", "--cache-info"])
-            .arg(mode_sha_path)
-            .output()?;
-    }
+    git_update_index_add_many(&file_name_to_git_sha)?;
+
+    // write to stdout for git clean
+    let pointer_file = create_pointer_file(file_names_ordered, file_name_to_git_sha)?;
+
+    stdout().write_all(pointer_file.as_bytes())?;
+
+    trace!("Pointer file sent");
 
     Ok(())
 }
 
-// // todo: use the actual
-// fn git_update_index_skip_worktree_many(entries: &HashMap<&String, String>) -> Result<()> {
-//     let entries = entries
-//         .into_iter()
-//         .map(|(content_sha, git_sha)| format!("100644 blob {} {} {}", git_sha, content_sha));
-
-//     Command::new("git")
-//         .args(["update-index", "--skip-worktree"])
-//         .args(entries)
-//         .output()?;
-
-//     Ok(())
-// }
-
 fn git_ensure_blobs(
     file_name_to_content: &HashMap<ContentSha, Vec<u8>>,
-) -> Result<HashMap<&ContentSha, GitObjectSized>> {
+) -> Result<HashMap<&ContentSha, GitObjectId>> {
     file_name_to_content
         .iter()
         .map(|(content_sha, contents)| {
-            let git_object_sized = GitObjectSized::from_contents(contents)?;
+            let git_object_sized = GitObjectId::from_contents(contents)?;
             Ok((content_sha, git_object_sized))
         })
         .collect::<Result<HashMap<_, _>>>()
 }
 
-// fn create_pointer_file(
-//     file_names_ordered: Vec<String>,
-//     file_name_to_git_sha: HashMap<&String, String>,
-// ) -> Result<String> {
-//     Ok(file_names_ordered
-//         .iter()
-//         .map(|content_sha| {
-//             file_name_to_git_sha
-//                 .get(content_sha)
-//                 .ok_or_else(|| anyhow!("Expected to find this"))
-//         })
-//         .collect::<Result<Vec<_>>>()?
-//         .into_iter()
-//         .intersperse(&"\n".to_string())
-//         .cloned()
-//         .collect::<String>())
-// }
+// create all the entries in the index
+// the reverse will still exist in the worktree for now.
+fn git_update_index_add_many(entries: &HashMap<&ContentSha, GitObjectId>) -> Result<()> {
+    let base = PathBuf::from_str(".gfs/contents")?;
+
+    let mut paths = Vec::<PathBuf>::with_capacity(entries.len());
+
+    for (content_sha, git_object) in entries {
+        let path = base.join(content_sha);
+
+        let mode_sha_path = format!("100644,{},{}\n", git_object, path.display());
+
+        Command::new("git")
+            .args(["update-index", "--add", "--cache-info"])
+            .arg(mode_sha_path)
+            .output()?;
+
+        paths.push(path)
+    }
+
+    trace!("Created index but with worktree");
+
+    Command::new("git")
+        .args(["update-index", "--skip-worktree"])
+        .args(paths)
+        .output()?;
+
+    trace!("Updated index by skipping worktree");
+
+    Ok(())
+}
+
+fn create_pointer_file(
+    file_names_ordered: Vec<ContentSha>,
+    file_name_to_git_sha: HashMap<&ContentSha, GitObjectId>,
+) -> Result<String> {
+    Ok(file_names_ordered
+        .iter()
+        .map(|content_sha| {
+            file_name_to_git_sha
+                .get(content_sha)
+                .ok_or_else(|| anyhow!("Expected to find this"))
+        })
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .map(|a| a.value())
+        .intersperse(&"\n".to_string())
+        .cloned()
+        .collect::<String>())
+}
 
 fn split_into_chunks(
     options: CleanOptions,
@@ -116,32 +139,4 @@ fn split_into_chunks(
     }
 
     Ok((file_names_ordered, files))
-}
-
-pub fn clean(options: CleanOptions) -> Result<()> {
-    trace!("Running command 'clean'");
-
-    let (_file_names_ordered, file_name_to_content) = split_into_chunks(options)?;
-    trace!("Chunks split");
-
-    // create all the blobs
-    let file_name_to_git_sha = git_ensure_blobs(&file_name_to_content)?;
-    trace!("Created blobs");
-
-    git_update_index_add_many(&file_name_to_git_sha)?;
-    trace!("Created index but with worktrees");
-
-    todo!();
-
-    // // skip the worktree for all files
-    // git_update_index_skip_worktree_many(&file_name_to_git_sha)?;
-    // trace!("Applied --skip-worktree");
-
-    // // write to stdout for git clean
-    // let pointer_file = create_pointer_file(file_names_ordered, file_name_to_git_sha)?;
-    // stdout().write_all(pointer_file.as_bytes())?;
-
-    // trace!("Pointer file sent");
-
-    // Ok(())
 }

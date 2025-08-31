@@ -1,9 +1,10 @@
+#![feature(iter_intersperse)]
+
 mod clean;
 mod config;
 mod content_sha;
 mod flat_map_ok;
 mod git_object_id;
-mod git_object_sized;
 mod iter_reader_result;
 mod smudge;
 
