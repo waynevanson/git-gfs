@@ -1,11 +1,11 @@
 use crate::config::Config;
+use crate::content_sha::ContentSha;
+use crate::git_object_sized::GitObjectSized;
 use anyhow::anyhow;
 use anyhow::{Error, Result};
 use fastcdc::v2020::StreamCDC;
 use itertools::Itertools;
 use log::trace;
-use sha1::{Digest, Sha1};
-use std::io::BufRead;
 use std::process::Stdio;
 use std::{
     collections::HashMap,
@@ -33,72 +33,24 @@ impl TryFrom<Config> for CleanOptions {
     }
 }
 
-fn git_ensure_blob(contents: &[u8]) -> Result<String> {
-    let child = Command::new("git")
-        .args(["hash-object", "-w", "--no-filters", "--stdin"])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()?;
-
-    // using stdin so we don't have to specify a file to read
-    child
-        .stdin
-        .as_ref()
-        .ok_or_else(|| anyhow!("Expected stdin to exist"))?
-        .write_all(&contents)?;
-
-    let git_sha: String = child.wait_with_output()?.stdout.try_into()?;
-
-    // remove newlines (always at end)
-    let git_sha = git_sha.lines().join("");
-
-    trace!("Created GitSha1 '{}'", git_sha);
-
-    Ok(git_sha)
-}
-
-fn git_update_index_add_many(entries: &HashMap<&String, String>) -> Result<()> {
+fn git_update_index_add_many(entries: &HashMap<&ContentSha, GitObjectSized>) -> Result<()> {
     let base = PathBuf::from_str(".gfs/contents")?;
-
-    // %(objectmode) %(objecttype) %(objectname) %(objectsize:padded)%x09%(path)
-    //
-    // Various values from structured fields can be used to interpolate into the resulting output. For each outputting line, the following names can be used:
-
-    //
-    // objectmode
-    //     The mode of the object.
-    // objecttype
-    //     The type of the object (commit, blob or tree).
-    // objectname
-    //     The name of the object.
-    // objectsize[:padded]
-    //     The size of a blob object ("-" if it’s a commit or tree). It also supports a padded format of size with "%(objectsize:padded)".
-    // path
-    //     The pathname of the object.
-
-    // todo: probably get the sizes when creating them?
-    // but batching is probably just so good.
-    // todo: use stdin for this. needs some special bytes to kick off stdin
-    let sizes: Vec<_> = Command::new("git")
-        .args(["cat-file", "--batch-check", "-s"])
-        .args(entries.iter().map(|(_, git_sha)| git_sha))
-        .output()?
-        .stdout
-        .lines()
-        .filter_ok(|a| a.len() > 0)
-        .try_collect()?;
 
     // create all the entries in the index
     // the reverse will still exist in the worktree for now.
     let entries = entries
         .into_iter()
-        .zip_eq(sizes)
-        .map(|((content_sha, git_sha), size)| {
+        .map(|(content_sha, git_object)| {
             let path = base.join(content_sha);
-            let arg = format!("100644 blob {} {} {}", size, git_sha, path.display());
+            let arg = format!(
+                "100644 blob {} {} {}\n",
+                git_object.size(),
+                git_object.object_id(),
+                path.display()
+            );
             arg
         })
-        .join("\n");
+        .join("");
 
     let mut child = Command::new("git")
         .args(["update-index", "--add", "--index-info"])
@@ -131,46 +83,15 @@ fn git_update_index_add_many(entries: &HashMap<&String, String>) -> Result<()> {
 // }
 
 fn git_ensure_blobs(
-    file_name_to_content: &HashMap<String, Vec<u8>>,
-) -> Result<HashMap<&String, String>> {
-    let value = file_name_to_content
+    file_name_to_content: &HashMap<ContentSha, Vec<u8>>,
+) -> Result<HashMap<&ContentSha, GitObjectSized>> {
+    file_name_to_content
         .iter()
         .map(|(content_sha, contents)| {
-            let git_sha = git_ensure_blob(&contents)?;
-            Ok((content_sha, git_sha))
+            let git_object_sized = GitObjectSized::from_contents(contents)?;
+            Ok((content_sha, git_object_sized))
         })
-        .collect::<Result<HashMap<_, _>>>()?;
-
-    Ok(value)
-}
-
-pub fn clean(options: CleanOptions) -> Result<()> {
-    trace!("Running command 'clean'");
-
-    let (_file_names_ordered, file_name_to_content) = split_into_chunks(options)?;
-    trace!("Chunks split");
-
-    // create all the blobs
-    let file_name_to_git_sha = git_ensure_blobs(&file_name_to_content)?;
-    trace!("{:?}", file_name_to_git_sha);
-    trace!("Created blobs");
-
-    git_update_index_add_many(&file_name_to_git_sha)?;
-    trace!("Created index but with worktrees");
-
-    todo!();
-
-    // // skip the worktree for all files
-    // git_update_index_skip_worktree_many(&file_name_to_git_sha)?;
-    // trace!("Applied --skip-worktree");
-
-    // // write to stdout for git clean
-    // let pointer_file = create_pointer_file(file_names_ordered, file_name_to_git_sha)?;
-    // stdout().write_all(pointer_file.as_bytes())?;
-
-    // trace!("Pointer file sent");
-
-    // Ok(())
+        .collect::<Result<HashMap<_, _>>>()
 }
 
 // fn create_pointer_file(
@@ -191,28 +112,25 @@ pub fn clean(options: CleanOptions) -> Result<()> {
 //         .collect::<String>())
 // }
 
-fn split_into_chunks(options: CleanOptions) -> Result<(Vec<String>, HashMap<String, Vec<u8>>)> {
+fn split_into_chunks(
+    options: CleanOptions,
+) -> Result<(Vec<ContentSha>, HashMap<ContentSha, Vec<u8>>)> {
     let source = stdin();
 
     let iter = StreamCDC::new(source, options.min_size, options.avg_size, options.max_size);
 
-    let mut files = HashMap::<String, Vec<u8>>::new();
+    let mut files = HashMap::<ContentSha, Vec<u8>>::new();
 
     // todo: make &string and borrow from the hashmap
-    let mut file_names_ordered = Vec::<String>::new();
+    let mut file_names_ordered = Vec::<ContentSha>::new();
 
     trace!("Iterating CDC streaming");
 
-    for (index, item) in iter.enumerate() {
+    for item in iter {
         let chunk = item?;
-        trace!("Chunk successful at {}", index);
 
         // create a unique name - SHA1 seemed acceptable.
-        let sha = Sha1::digest(&chunk.data);
-        trace!("Sha1 generated for chunk {}", index);
-
-        let sha: String = format!("{:x}", sha);
-        trace!("Sha1 stringified for chunk {}", index);
+        let sha = ContentSha::from_contents(&chunk.data);
 
         files.insert(sha.clone(), chunk.data);
 
@@ -220,4 +138,32 @@ fn split_into_chunks(options: CleanOptions) -> Result<(Vec<String>, HashMap<Stri
     }
 
     Ok((file_names_ordered, files))
+}
+
+pub fn clean(options: CleanOptions) -> Result<()> {
+    trace!("Running command 'clean'");
+
+    let (_file_names_ordered, file_name_to_content) = split_into_chunks(options)?;
+    trace!("Chunks split");
+
+    // create all the blobs
+    let file_name_to_git_sha = git_ensure_blobs(&file_name_to_content)?;
+    trace!("Created blobs");
+
+    git_update_index_add_many(&file_name_to_git_sha)?;
+    trace!("Created index but with worktrees");
+
+    todo!();
+
+    // // skip the worktree for all files
+    // git_update_index_skip_worktree_many(&file_name_to_git_sha)?;
+    // trace!("Applied --skip-worktree");
+
+    // // write to stdout for git clean
+    // let pointer_file = create_pointer_file(file_names_ordered, file_name_to_git_sha)?;
+    // stdout().write_all(pointer_file.as_bytes())?;
+
+    // trace!("Pointer file sent");
+
+    // Ok(())
 }
